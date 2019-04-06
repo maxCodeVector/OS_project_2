@@ -104,7 +104,13 @@ struct thread
 
 
     int64_t ticks_blocked; /* record how many ticks this thread sleep */
+
+    int ori_pri;
+    struct list locks;
+    struct lock* want;
   };
+
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -144,4 +150,9 @@ int thread_get_load_avg (void);
 
 int comp_less(struct list_elem *first, struct list_elem *second, void *aux);
 
+/*
+void add_lock(struct lock* lock);
+void remove_lock(struct lock* lock);
+void donate_pri(struct thread* t, struct lock* lock, int pri);
+*/
 #endif /* threads/thread.h */

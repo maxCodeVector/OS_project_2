@@ -242,6 +242,15 @@ thread_block(void) {
     ASSERT(intr_get_level() == INTR_OFF);
 
     thread_current()->status = THREAD_BLOCKED;
+
+    if(!thread_mlfqs) {
+        enum intr_level old_level;
+        ASSERT(intr_get_level() == INTR_OFF);
+        old_level = intr_disable();
+        list_sort (&ready_list, comp_less, NULL);
+//        list_insert_ordered(&ready_list, &t->elem, comp_less, NULL);
+        intr_set_level(old_level);
+    }
     schedule();
 }
 
@@ -329,6 +338,12 @@ thread_yield(void) {
     ASSERT(!intr_context());
 
     old_level = intr_disable();
+
+    if(!thread_mlfqs) {
+        list_sort (&ready_list, comp_less, NULL);
+    }
+
+
     if (cur != idle_thread)
         list_insert_ordered(&ready_list, &cur->elem, comp_less, NULL);
 //    list_push_back (&ready_list, &cur->elem);
@@ -356,7 +371,13 @@ thread_foreach(thread_action_func *func, void *aux) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority(int new_priority) {
-    thread_current()->priority = new_priority;
+    if(!thread_mlfqs) {
+        struct thread *t = thread_current();
+        t->ori_pri = new_priority;
+        update_pri(t);
+    } else
+        thread_current()->priority = new_priority;
+
 
     thread_yield();
 }
@@ -460,14 +481,6 @@ is_thread(struct thread *t) {
 }
 
 
-int comp_less(struct list_elem *first, struct list_elem *second, void *aux) {
-    struct thread *t_f = list_entry(first, struct thread, elem);
-    struct thread *t_s = list_entry(second, struct thread, elem);
-    if (t_f->priority > t_s->priority)
-        return 1;
-    else
-        return 0;
-}
 
 
 /* Does basic initialization of T as a blocked thread named
@@ -487,6 +500,9 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->priority = priority;
     t->magic = THREAD_MAGIC;
 
+    list_init(&t->locks);
+    t->ori_pri = priority;
+    t->want = NULL;
 
     t->ticks_blocked = 0;
 
@@ -602,6 +618,83 @@ allocate_tid(void) {
 
     return tid;
 }
+
+
+
+int comp_less(struct list_elem *first, struct list_elem *second, void *aux) {
+    struct thread *t_f = list_entry(first, struct thread, elem);
+    struct thread *t_s = list_entry(second, struct thread, elem);
+    if (t_f->priority > t_s->priority)
+        return 1;
+    else
+        return 0;
+}
+
+
+// add lock to current thread's lock list
+void update_pri(struct thread* t){
+
+    struct list_elem *e;
+    int max_pri=t->ori_pri;
+    for (e = list_begin(&t->locks); e != list_end(&t->locks);
+         e = list_next(e)) {
+        struct lock *lockHold = list_entry(e, struct lock, elem);
+        if (lockHold->max_pri > max_pri) {
+            max_pri = lockHold->max_pri;
+        }
+    }
+    t->priority = max_pri;
+
+}
+
+
+// add lock to current thread's lock list
+void add_lock(struct lock* lock){
+    struct thread *t = thread_current();
+    list_push_back (&t->locks, &lock->elem);
+
+}
+
+
+// add lock to current thread's lock list
+void remove_lock(struct lock* lock){
+    struct thread *t = thread_current();
+
+    struct list_elem *e;
+
+    for (e = list_begin(&t->locks); e != list_end(&t->locks);
+         e = list_next(e)) {
+        struct lock *alock = list_entry(e, struct lock, elem);
+        if (alock == lock) {
+            list_remove(e);
+            break;
+        }
+    }
+    update_pri(t);
+}
+
+// add lock to current thread's lock list
+void donate_pri(struct lock* lock, int pri){
+    enum intr_level old_level = intr_disable();
+
+    while (lock!=NULL) {
+        if (pri > lock->max_pri) {
+            lock->max_pri = pri;
+
+            ASSERT(lock->holder!=NULL);
+            update_pri(lock->holder);
+
+        } else
+            break;
+        lock = lock->holder -> want;
+    }
+    intr_set_level (old_level);
+
+}
+
+
+
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

@@ -72,7 +72,7 @@ sema_down (struct semaphore *sema)
         list_insert_ordered(&sema->waiters, &thread_current ()->elem, comp_less, NULL);
 
 //        list_push_back (&sema->waiters, &thread_current ()->elem);
-      thread_block ();
+        thread_block ();
     }
   sema->value--;
   intr_set_level (old_level);
@@ -195,14 +195,30 @@ lock_init (struct lock *lock)
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
 void
-lock_acquire (struct lock *lock)
-{
-  ASSERT (lock != NULL);
-  ASSERT (!intr_context ());
-  ASSERT (!lock_held_by_current_thread (lock));
+lock_acquire (struct lock *lock) {
+    ASSERT(lock != NULL);
+    ASSERT(!intr_context());
+    ASSERT(!lock_held_by_current_thread(lock));
 
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+
+    struct thread* t = thread_current();
+
+#ifdef BUG
+    if(!thread_mlfqs && lock->holder!=NULL){
+        t->want = lock;
+      donate_pri(lock, thread_get_priority ());
+    }
+#endif
+    sema_down(&lock->semaphore);
+
+    enum intr_level old_level = intr_disable();
+    t->want = NULL;
+    lock->holder = t;
+    if (!thread_mlfqs){
+        //add this lock in current thread's lock list
+        add_lock(lock);
+    }
+    intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -237,6 +253,9 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
+  if(!thread_mlfqs)
+    //remove this lock in current thread's lock list
+    remove_lock(lock);
   sema_up (&lock->semaphore);
 }
 
