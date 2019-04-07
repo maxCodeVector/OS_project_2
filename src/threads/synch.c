@@ -116,9 +116,14 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters)) {
+
+    if(!thread_mlfqs) {
+      list_sort(&sema->waiters, comp_less, NULL);
+    }
+    thread_unblock(list_entry(list_pop_front(&sema->waiters),
+    struct thread, elem));
+  }
   sema->value++;
   intr_set_level (old_level);
   // yield current thread to let other thread weak
@@ -183,6 +188,10 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
+
+  if(!thread_mlfqs)
+    lock->max_pri = 0;
+
   sema_init (&lock->semaphore, 1);
 }
 
@@ -253,9 +262,12 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
-  if(!thread_mlfqs)
-    //remove this lock in current thread's lock list
-    remove_lock(lock);
+
+  if(!thread_mlfqs) {
+      lock->max_pri = 0;
+      //remove this lock in current thread's lock list
+      remove_lock(lock);
+  }
   sema_up (&lock->semaphore);
 }
 

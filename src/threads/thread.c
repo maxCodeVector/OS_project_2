@@ -243,14 +243,7 @@ thread_block(void) {
 
     thread_current()->status = THREAD_BLOCKED;
 
-    if(!thread_mlfqs) {
-        enum intr_level old_level;
-        ASSERT(intr_get_level() == INTR_OFF);
-        old_level = intr_disable();
-        list_sort (&ready_list, comp_less, NULL);
-//        list_insert_ordered(&ready_list, &t->elem, comp_less, NULL);
-        intr_set_level(old_level);
-    }
+
     schedule();
 }
 
@@ -339,9 +332,7 @@ thread_yield(void) {
 
     old_level = intr_disable();
 
-    if(!thread_mlfqs) {
-        list_sort (&ready_list, comp_less, NULL);
-    }
+
 
 
     if (cur != idle_thread)
@@ -644,6 +635,13 @@ void update_pri(struct thread* t){
         }
     }
     t->priority = max_pri;
+
+    if(t->status == THREAD_READY) {
+        enum intr_level old_level = intr_disable();
+        list_sort (&ready_list, comp_less, NULL);
+//        list_insert_ordered(&ready_list, &t->elem, comp_less, NULL);
+        intr_set_level(old_level);
+    }
 
 }
 
