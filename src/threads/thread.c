@@ -148,7 +148,7 @@ void check_thread_pri(struct thread *thr, void *aux) {
 
     new_pri = FP_SUB(
             FP_SUB( FP_CONST(PRI_MAX),  FP_DIV_MIX(thr->recent_cpu, 4)),
-            FP_MULT_MIX(thr->nice,2)
+            FP_MULT_MIX(FP_CONST(thr->nice), 2)
     );
 
     int priority = FP_ROUND(new_pri);
