@@ -111,6 +111,7 @@ struct thread
 
     // to implement mlfqs
     int nice;
+    fixed_t recent_cpu;
   };
 
 

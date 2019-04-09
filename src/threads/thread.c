@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
+
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -59,6 +61,9 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+// record thread's oag_avg
+fixed_t load_avg=FP_CONST(0);
+
 static void kernel_thread(thread_func *, void *aux);
 
 static void idle(void *aux UNUSED);
@@ -80,6 +85,8 @@ static void schedule(void);
 void thread_schedule_tail(struct thread *prev);
 
 static tid_t allocate_tid(void);
+
+int get_ready_threads();
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -136,11 +143,43 @@ void check_block_thread(struct thread *thr, void *aux) {
     }
 }
 
+void check_thread_pri(struct thread *thr, void *aux) {
+    fixed_t new_pri;
+
+    new_pri = FP_SUB(
+            FP_SUB( FP_CONST(PRI_MAX),  FP_DIV_MIX(thr->recent_cpu, 4)),
+            FP_MULT_MIX(thr->nice,2)
+    );
+
+    int priority = FP_ROUND(new_pri);
+    if(priority > PRI_MAX)
+        priority = PRI_MAX;
+    if(priority < PRI_MIN)
+        priority = PRI_MIN;
+    
+    thr->priority = priority;
+    ASSERT(PRI_MIN <= thr -> priority && thr->priority <= PRI_MAX );
+}
+
+void check_thread_cpu(struct thread *thr, void *aux) {
+    fixed_t load_avg_times2 = FP_MULT_MIX(load_avg,2);
+    fixed_t coef_cpu = FP_DIV( load_avg_times2, FP_ADD_MIX(load_avg_times2, 1));
+
+    thr->recent_cpu = FP_ADD_MIX(
+            FP_MULT( coef_cpu, thr->recent_cpu),
+            thr->nice
+    );
+
+}
+
+
 
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
 thread_tick(void) {
+    static fixed_t coef1 = FP_DIV_MIX( FP_CONST(59), 60);
+    static fixed_t coef2 = FP_DIV_MIX( FP_CONST(1), 60);
     struct thread *t = thread_current();
 
     /* Update statistics. */
@@ -150,9 +189,22 @@ thread_tick(void) {
         else if (t->pagedir != NULL)
           user_ticks++;
 #endif
-    else
+    else {
         kernel_ticks++;
-
+        t->recent_cpu = FP_ADD_MIX(t->recent_cpu,1);
+    }
+    int64_t tick = timer_ticks ();
+    if(thread_mlfqs && tick % TIMER_FREQ == 0){
+        thread_foreach(check_thread_cpu, NULL);
+        load_avg = FP_ADD(
+                FP_MULT(coef1, load_avg),
+                FP_MULT_MIX(coef2, get_ready_threads())
+        );
+    }
+    if(thread_mlfqs && tick % 4==0){
+        thread_foreach(check_thread_pri, NULL);
+        list_sort (&ready_list, comp_less, NULL);
+    }
     enum intr_level old_level = intr_disable();
     thread_foreach(check_block_thread, NULL);
     intr_set_level(old_level);
@@ -382,15 +434,9 @@ thread_get_priority(void) {
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice(int nice UNUSED) {
-    fixed_t new_pri;
-    thread_current()->nice = nice;
-
-    new_pri = FP_SUB(
-            FP_SUB( FP_CONST(PRI_MAX),  FP_DIV_MIX(thread_get_recent_cpu(), 4)),
-            FP_MULT_MIX(nice,2)
-            );
-
-    thread_set_priority(FP_ROUND(new_pri) );
+    struct thread* t = thread_current();
+    t->nice = nice;
+    check_thread_pri(t, NULL);
 
     thread_yield();
     /* Not yet implemented. */
@@ -407,14 +453,15 @@ thread_get_nice(void) {
 int
 thread_get_load_avg(void) {
     /* Not yet implemented. */
-    return 0;
+    return FP_ROUND( FP_MULT_MIX(load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu(void) {
+    fixed_t recent = thread_current()->recent_cpu;
     /* Not yet implemented. */
-    return 0;
+    return FP_ROUND( FP_MULT_MIX(recent, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -502,11 +549,18 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->priority = priority;
     t->magic = THREAD_MAGIC;
 
+    // do priroty donation
     list_init(&t->locks);
     t->ori_pri = priority;
     t->want = NULL;
 
+    // change busy wait for sleep
     t->ticks_blocked = 0;
+
+    // do mlfqs
+    t->recent_cpu = FP_CONST(0);
+    t->nice = 0;
+
 
     old_level = intr_disable();
 
@@ -701,6 +755,15 @@ void donate_pri(struct lock* lock, int pri){
 
 }
 
+int get_ready_threads(){
+    int ready_threads;
+    if(idle_thread!=NULL && thread_current()->tid==idle_thread->tid)
+        ready_threads = 0;
+    else
+        ready_threads = 1;
+    ready_threads += list_size (&ready_list);
+    return ready_threads;
+}
 
 
 
