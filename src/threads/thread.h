@@ -108,6 +108,9 @@ struct thread
     int ori_pri;
     struct list locks;
     struct lock* want;
+
+    // to implement mlfqs
+    int nice;
   };
 
 

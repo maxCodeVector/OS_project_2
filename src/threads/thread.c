@@ -382,6 +382,17 @@ thread_get_priority(void) {
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice(int nice UNUSED) {
+    fixed_t new_pri;
+    thread_current()->nice = nice;
+
+    new_pri = FP_SUB(
+            FP_SUB( FP_CONST(PRI_MAX),  FP_DIV_MIX(thread_get_recent_cpu(), 4)),
+            FP_MULT_MIX(nice,2)
+            );
+
+    thread_set_priority(FP_ROUND(new_pri) );
+
+    thread_yield();
     /* Not yet implemented. */
 }
 
@@ -389,7 +400,7 @@ thread_set_nice(int nice UNUSED) {
 int
 thread_get_nice(void) {
     /* Not yet implemented. */
-    return 0;
+    return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -622,7 +633,7 @@ int comp_less(struct list_elem *first, struct list_elem *second, void *aux) {
 }
 
 
-// add lock to current thread's lock list
+
 void update_pri(struct thread* t){
 
     struct list_elem *e;
