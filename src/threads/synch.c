@@ -212,12 +212,10 @@ lock_acquire (struct lock *lock) {
 
     struct thread* t = thread_current();
 
-#ifdef BUG
     if(!thread_mlfqs && lock->holder!=NULL){
         t->want = lock;
       donate_pri(lock, thread_get_priority ());
     }
-#endif
     sema_down(&lock->semaphore);
 
     enum intr_level old_level = intr_disable();
@@ -371,9 +369,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  if (!list_empty (&cond->waiters)) {
+    list_sort(&cond->waiters, comp_sema_less, NULL);
+    sema_up(&list_entry(list_pop_front(&cond->waiters),
+    struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
