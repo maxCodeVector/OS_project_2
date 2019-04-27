@@ -146,12 +146,12 @@ void check_block_thread(struct thread *thr, void *aux) {
 void check_thread_pri(struct thread *thr, void *aux) {
     fixed_t new_pri;
 
-    new_pri = FP_SUB_MIX(
+    new_pri = FP_SUB(
             FP_SUB( FP_CONST(PRI_MAX),  FP_DIV_MIX(thr->recent_cpu, 4)),
-            thr->nice * 2
+            FP_MULT_MIX(FP_CONST(thr->nice), 2)
     );
 
-    int priority = FP_INT_PART(new_pri);
+    int priority = FP_ROUND(new_pri);
     if(priority > PRI_MAX)
         priority = PRI_MAX;
     if(priority < PRI_MIN)
@@ -165,14 +165,8 @@ void check_thread_cpu(struct thread *thr, void *aux) {
     fixed_t load_avg_times2 = FP_MULT_MIX(load_avg,2);
     fixed_t coef_cpu = FP_DIV( load_avg_times2, FP_ADD_MIX(load_avg_times2, 1));
 
-//    thr->recent_cpu = FP_ADD_MIX(
-//            FP_MULT( coef_cpu, thr->recent_cpu),
-//            thr->nice
-//    );
-
-
     thr->recent_cpu = FP_ADD_MIX(
-            FP_MULT_MIX( coef_cpu, FP_ROUND(thr->recent_cpu)),
+            FP_MULT( coef_cpu, thr->recent_cpu),
             thr->nice
     );
 
@@ -201,17 +195,11 @@ thread_tick(void) {
     }
     int64_t tick = timer_ticks ();
     if(thread_mlfqs && tick % TIMER_FREQ == 0){
-        load_avg = FP_ADD(
-                FP_DIV_MIX( FP_MULT_MIX(load_avg, 59), 60),
-                FP_DIV_MIX( FP_CONST(get_ready_threads()),60)
-        );
         thread_foreach(check_thread_cpu, NULL);
-//        load_avg = FP_ADD(
-//                FP_MULT(coef1, load_avg),
-//                FP_MULT_MIX(coef2, get_ready_threads())
-//        );
-
-
+        load_avg = FP_ADD(
+                FP_MULT(coef1, load_avg),
+                FP_MULT_MIX(coef2, get_ready_threads())
+        );
     }
     if(thread_mlfqs && tick % 4==0){
         thread_foreach(check_thread_pri, NULL);
@@ -748,7 +736,7 @@ void remove_lock(struct lock* lock){
     update_pri(t);
 }
 
-
+// add lock to current thread's lock list
 void donate_pri(struct lock* lock, int pri){
     enum intr_level old_level = intr_disable();
 
