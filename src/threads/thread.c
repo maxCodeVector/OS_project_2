@@ -294,6 +294,54 @@ thread_create(const char *name, int priority,
     return tid;
 }
 
+
+tid_t thread_create_and_back( const char *name, int priority,
+              thread_func *function, void *aux, struct semaphore* wait_child) {
+    struct thread *t;
+    struct kernel_thread_frame *kf;
+    struct switch_entry_frame *ef;
+    struct switch_threads_frame *sf;
+    tid_t tid;
+
+    ASSERT(function != NULL);
+
+    /* Allocate thread. */
+    t = palloc_get_page(PAL_ZERO);
+    if (t == NULL)
+        return TID_ERROR;
+
+    /* Initialize thread. */
+    init_thread(t, name, priority);
+#ifdef USERPROG
+    t->wait_child=wait_child;
+    
+#endif
+
+    
+    tid = t->tid = allocate_tid();
+
+    /* Stack frame for kernel_thread(). */
+    kf = alloc_frame(t, sizeof *kf);
+    kf->eip = NULL;
+    kf->function = function;
+    kf->aux = aux;
+
+    /* Stack frame for switch_entry(). */
+    ef = alloc_frame(t, sizeof *ef);
+    ef->eip = (void (*)(void)) kernel_thread;
+
+    /* Stack frame for switch_threads(). */
+    sf = alloc_frame(t, sizeof *sf);
+    sf->eip = switch_entry;
+    sf->ebp = 0;
+
+    /* Add to run queue. */
+    thread_unblock(t);
+
+    thread_yield();
+    return tid;
+}
+
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -573,6 +621,11 @@ init_thread(struct thread *t, const char *name, int priority) {
     t->recent_cpu = FP_CONST(0);
     t->nice = 0;
 
+    #ifdef USERPROG
+    t->rtv = 0;
+    t->wait_child = NULL;
+    t->to_wait = NULL;
+    #endif
 
     old_level = intr_disable();
 

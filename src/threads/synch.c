@@ -127,7 +127,9 @@ sema_up (struct semaphore *sema)
   sema->value++;
   intr_set_level (old_level);
   // yield current thread to let other thread weak
-  thread_yield();
+  #ifndef USERPROG
+    thread_yield();
+  #endif
 }
 
 static void sema_test_helper (void *sema_);

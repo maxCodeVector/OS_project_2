@@ -97,6 +97,10 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    int rtv;
+    struct semaphore* wait_child;
+    struct semaphore* to_wait;
+    
 #endif
 
     /* Owned by thread.c. */
@@ -154,6 +158,8 @@ int thread_get_load_avg (void);
 
 int comp_less(struct list_elem *first, struct list_elem *second, void *aux);
 
+tid_t thread_create_and_back( const char *name, int priority,
+              thread_func *function, void *aux, struct semaphore* wait_child);
 /*
 void add_lock(struct lock* lock);
 void remove_lock(struct lock* lock);
