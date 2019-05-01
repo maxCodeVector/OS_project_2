@@ -46,14 +46,7 @@ process_execute (const char *file_name)
   real_name = strtok_r(file_name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  // tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
-  
-  
-  struct semaphore wait_child;
-  sema_init(&wait_child, 0);
-  tid = thread_create_and_back(real_name, PRI_MAX, start_process, fn_copy, &wait_child); 
-  thread_current()->to_wait = &wait_child;
-
+  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -78,12 +71,12 @@ start_process (void *file_name_)
   token = strtok_r(file_name, " ", &save_ptr);
   success = load (token, &if_.eip, &if_.esp);
   char* esp_tmp = (char*)if_.esp;
-  char* arg[16];
+  char* arg[32];
   int i, n=0;
   for(;token!=NULL;token=strtok_r(NULL, " ", &save_ptr)){
-  esp_tmp -= strlen(token)+1;
-  strlcpy(esp_tmp, token, strlen(token)+2);
-  arg[n++] = esp_tmp;
+    esp_tmp -= strlen(token)+1;
+    strlcpy(esp_tmp, token, strlen(token)+2);
+    arg[n++] = esp_tmp;
   }
   while((int)esp_tmp%4!=0){
     esp_tmp--;
@@ -130,11 +123,16 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 { 
-    struct semaphore* to_wait = thread_current()->to_wait;
-    thread_set_priority(PRI_MIN);
-    // if(to_wait!=NULL){
-    //   sema_down(to_wait);
-    // }  
+//     struct semaphore* to_wait = find_thread_by_tid(child_tid)->wait_child;
+//     // thread_set_priority(PRI_MIN);
+//     if(to_wait!=NULL){
+//       to_wait->value = 0;
+//       sema_down(to_wait);
+//     }  
+    struct thread* t = find_thread_by_tid(child_tid);
+    while( t->tid==child_tid && t->status!=THREAD_DYING ){
+      thread_yield();
+    }
     return -1;
 }
 
@@ -161,6 +159,7 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+      cur->wait_child->value = 0;
       // sema_up (cur->wait_child); 
     }
 }

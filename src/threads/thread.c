@@ -289,56 +289,10 @@ thread_create(const char *name, int priority,
     /* Add to run queue. */
     thread_unblock(t);
 
+#ifndef USERPROG
     thread_yield();
-
-    return tid;
-}
-
-
-tid_t thread_create_and_back( const char *name, int priority,
-              thread_func *function, void *aux, struct semaphore* wait_child) {
-    struct thread *t;
-    struct kernel_thread_frame *kf;
-    struct switch_entry_frame *ef;
-    struct switch_threads_frame *sf;
-    tid_t tid;
-
-    ASSERT(function != NULL);
-
-    /* Allocate thread. */
-    t = palloc_get_page(PAL_ZERO);
-    if (t == NULL)
-        return TID_ERROR;
-
-    /* Initialize thread. */
-    init_thread(t, name, priority);
-#ifdef USERPROG
-    t->wait_child=wait_child;
-    
 #endif
 
-    
-    tid = t->tid = allocate_tid();
-
-    /* Stack frame for kernel_thread(). */
-    kf = alloc_frame(t, sizeof *kf);
-    kf->eip = NULL;
-    kf->function = function;
-    kf->aux = aux;
-
-    /* Stack frame for switch_entry(). */
-    ef = alloc_frame(t, sizeof *ef);
-    ef->eip = (void (*)(void)) kernel_thread;
-
-    /* Stack frame for switch_threads(). */
-    sf = alloc_frame(t, sizeof *sf);
-    sf->eip = switch_entry;
-    sf->ebp = 0;
-
-    /* Add to run queue. */
-    thread_unblock(t);
-
-    thread_yield();
     return tid;
 }
 
@@ -623,7 +577,9 @@ init_thread(struct thread *t, const char *name, int priority) {
 
     #ifdef USERPROG
     t->rtv = 0;
-    t->wait_child = NULL;
+    struct semaphore sema;
+    sema_init(&sema, 1);
+    t->wait_child = &sema;
     t->to_wait = NULL;
     #endif
 
@@ -830,7 +786,47 @@ int get_ready_threads(){
     return ready_threads;
 }
 
+struct thread* find_thread_by_tid(tid_t id)
+{
+    struct thread* res = NULL;
+     enum intr_level old_level = intr_disable();
 
+    struct list_elem *e;
+
+    ASSERT(intr_get_level() == INTR_OFF);
+
+    for (e = list_begin(&all_list); e != list_end(&all_list);
+         e = list_next(e)) {
+        struct thread *t = list_entry(e,
+        struct thread, allelem);
+        if(t->tid==id){
+            res = t;
+            break;
+        }
+            
+    }
+    
+    intr_set_level(old_level);
+    return res;
+}
+
+
+static struct thread* show_all_list[10];
+
+void list_all_thread(struct list* list)
+{
+
+    struct list_elem *e;
+
+    int i=0;
+    for (e = list_begin(&all_list); e != list_end(&all_list);
+         e = list_next(e)) {
+        struct thread *t = list_entry(e,
+        struct thread, allelem);
+        show_all_list[i] = t;
+        i++;
+    }    
+}
 
 
 /* Offset of `stack' member within `struct thread'.

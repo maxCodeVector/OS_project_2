@@ -158,8 +158,11 @@ int thread_get_load_avg (void);
 
 int comp_less(struct list_elem *first, struct list_elem *second, void *aux);
 
-tid_t thread_create_and_back( const char *name, int priority,
-              thread_func *function, void *aux, struct semaphore* wait_child);
+
+struct thread* find_thread_by_tid(tid_t id);
+
+void list_all_thread(struct list* list);
+
 /*
 void add_lock(struct lock* lock);
 void remove_lock(struct lock* lock);
