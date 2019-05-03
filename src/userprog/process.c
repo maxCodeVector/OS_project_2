@@ -159,8 +159,7 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-      cur->wait_child->value = 0;
-      // sema_up (cur->wait_child); 
+      
     }
 }
 

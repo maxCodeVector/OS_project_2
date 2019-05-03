@@ -98,27 +98,11 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int rtv;
-    struct semaphore* wait_child;
-    struct semaphore* to_wait;
-    
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-
-    int64_t ticks_blocked; /* record how many ticks this thread sleep */
-
-    int ori_pri;
-    struct list locks;
-    struct lock* want;
-
-    // to implement mlfqs
-    int nice;
-    fixed_t recent_cpu;
   };
-
-
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -156,16 +140,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-int comp_less(struct list_elem *first, struct list_elem *second, void *aux);
-
-
 struct thread* find_thread_by_tid(tid_t id);
 
-void list_all_thread(struct list* list);
-
-/*
-void add_lock(struct lock* lock);
-void remove_lock(struct lock* lock);
-void donate_pri(struct thread* t, struct lock* lock, int pri);
-*/
 #endif /* threads/thread.h */
