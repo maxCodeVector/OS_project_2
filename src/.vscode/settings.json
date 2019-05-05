@@ -6,6 +6,9 @@
         "interrupt.h": "c",
         "syscall-nr.h": "c",
         "init.h": "c",
-        "syscall.h": "c"
+        "syscall.h": "c",
+        "lib.h": "c",
+        "round.h": "c",
+        "palloc.h": "c"
     }
 }

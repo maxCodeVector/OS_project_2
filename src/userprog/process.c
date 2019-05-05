@@ -42,11 +42,18 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
 
-  char* real_name=NULL, *save_ptr=NULL;
-  real_name = strtok_r(file_name, " ", &save_ptr);
+  // must make a copy to make sure doesnot mistake 
+  char* file_np2 = (char*)malloc( (strlen(file_name)+1)*sizeof(char) );
+  strlcpy(file_np2, file_name, strlen(file_name)+1);
+
+  char* real_name, *save_ptr;
+  real_name = strtok_r(file_np2, " ", &save_ptr);  
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
+
+  free(file_np2);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;

@@ -7,6 +7,8 @@
 // ====================
 #include "devices/shutdown.h"
 #include "threads/vaddr.h"
+#include "process.h"
+#include "threads/palloc.h"
 #define MAXCALL 20
 
 static void syscall_handler (struct intr_frame *);
@@ -16,8 +18,23 @@ void ExitStatus(int status);
 void IWrite(struct intr_frame * f);
 void IExit(struct intr_frame * f);
 void IHALT(struct intr_frame * f);
+void IEXEC(struct intr_frame * f);
+void IWAIT(struct intr_frame * f);
 typedef void(*CALL_PROC)(struct  intr_frame*);
 CALL_PROC pfn[MAXCALL];
+
+
+bool is_valid_addr(const void *vaddr)
+{
+	void *page_ptr = pagedir_get_page(thread_current()->pagedir, vaddr);
+
+	if (!is_user_vaddr(vaddr) || page_ptr == NULL)
+	{
+    return false;
+	}
+	return true;
+}
+
 
 void
 syscall_init (void) 
@@ -30,12 +47,14 @@ syscall_init (void)
   pfn[SYS_WRITE] = IWrite;
   pfn[SYS_EXIT] = IExit;
   pfn[SYS_HALT] = IHALT;
+  pfn[SYS_EXEC] = IEXEC;
+  pfn[SYS_WAIT] = IWAIT;
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  if(!is_user_vaddr(f->esp) || f->esp == 0x40480a5){
+  if( !is_valid_addr(f->esp) ){
     ExitStatus(-1);
   }
   int No = *(int*)(f->esp);
@@ -93,4 +112,24 @@ void IHALT(struct intr_frame * f)
 {
   shutdown_power_off();
   f->eax = 0;
+}
+
+
+void IEXEC(struct intr_frame * f){
+
+  int *esp = (int*)f->esp;
+  if(!is_user_vaddr(esp+1))
+    ExitStatus(-1);
+  else{
+    char* file = *(esp+1);
+    f->eax = process_execute(file);
+  }
+}
+void IWAIT(struct intr_frame * f){
+  int *esp = (int*)f->esp;
+  // if(!is_user_vaddr(esp+7))
+    // ExitStatus(-1);
+  tid_t wait_id = *(esp+1);
+  process_wait(wait_id);
+
 }

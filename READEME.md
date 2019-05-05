@@ -1,6 +1,8 @@
 change --qumu to --bocus,
 
-process_wait() and `system call write` need to implement first, unless nothing output. (can use semaphore)
+process_wait() and `system call write` need to implement first, unless nothing output. 
+
+(can use semaphore, now just use busy waiting, it can not solve  wait(-1) problem ).
 
 Need to write system call hander for each system call.
 
