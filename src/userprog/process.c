@@ -75,7 +75,7 @@ start_process (void *file_name_)
   int i, n=0;
   for(;token!=NULL;token=strtok_r(NULL, " ", &save_ptr)){
     esp_tmp -= strlen(token)+1;
-    strlcpy(esp_tmp, token, strlen(token)+2);
+    strlcpy(esp_tmp, token, strlen(token)+1);  // why document said +2?
     arg[n++] = esp_tmp;
   }
   while((int)esp_tmp%4!=0){

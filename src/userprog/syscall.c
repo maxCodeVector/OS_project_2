@@ -3,6 +3,10 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+
+// ====================
+#include "devices/shutdown.h"
+#include "threads/vaddr.h"
 #define MAXCALL 20
 
 static void syscall_handler (struct intr_frame *);
@@ -11,6 +15,7 @@ static void syscall_handler (struct intr_frame *);
 void ExitStatus(int status);
 void IWrite(struct intr_frame * f);
 void IExit(struct intr_frame * f);
+void IHALT(struct intr_frame * f);
 typedef void(*CALL_PROC)(struct  intr_frame*);
 CALL_PROC pfn[MAXCALL];
 
@@ -24,18 +29,19 @@ syscall_init (void)
   }
   pfn[SYS_WRITE] = IWrite;
   pfn[SYS_EXIT] = IExit;
+  pfn[SYS_HALT] = IHALT;
 }
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // if(!is_user_vaddr(f->esp)){
-  //   ExitStatus(-1);
-  // }
+  if(!is_user_vaddr(f->esp) || f->esp == 0x40480a5){
+    ExitStatus(-1);
+  }
   int No = *(int*)(f->esp);
   if(No>MAXCALL || No < 0)
   {
-    printf("We don't have this system call!\n");
+    // printf("We don't have this system call!\n");
     ExitStatus(-1);
   }
   if(pfn[No] == NULL)
@@ -56,7 +62,13 @@ void ExitStatus(int status){
 
 void IExit(struct intr_frame * f)
 {
-  thread_exit();
+  int *esp = (int*)f->esp;
+  if(!is_user_vaddr(esp+1))
+    ExitStatus(-1);
+  else{
+    int rtv = *(esp+1);
+    ExitStatus(rtv);
+  }
 }
 
 void IWrite(struct intr_frame * f)
@@ -75,4 +87,10 @@ void IWrite(struct intr_frame * f)
     printf("I only can print in console!\n");
   }
 
+}
+
+void IHALT(struct intr_frame * f)
+{
+  shutdown_power_off();
+  f->eax = 0;
 }
