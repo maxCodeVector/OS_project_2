@@ -21,3 +21,8 @@ must use argument -v -k -t 60
 - sc-bad-sp: check f->esp's value, but I can not recognize this type of bad address.
 
 - sc-bad-arg: check f->esp's value
+
+- exec-bound-2: check esp's value, but I can not kown whether this address is bad!!
+
+- exec-bound-3: see exec-bound-2.
+
