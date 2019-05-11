@@ -58,7 +58,7 @@ void ExitStatus(int status){
 }
 ```
 
-The syscall parameter arguments was stored in `f->esp`. The order and type of them can be seen in /syscall.c.
+The syscall parameter arguments was stored in `f->esp`. The order and type of them can be seen in lib/user/syscall.c.
 
 ```c
 void IExit(struct intr_frame * f)
