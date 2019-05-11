@@ -4,9 +4,9 @@ member: chengmin, huang Yu'an
 ### Before start:
 1. change --qumu to --bocus,
 
-2. process_wait() and system call write need to implement first, unless nothing output. (can use semaphore)
+2. process_wait() and system call write need to implement first, unless nothing output. (can use semaphore), now its busy waitting. It needs more smart implement later especially for syscall `wait()`. 
 
-3. Can change compile optimized model to O0 for more convenient test
+3. Can change compile optimized model to O0 for more convenient debug.
 
 ### Start:
 
@@ -20,7 +20,7 @@ must use argument -v -k -t 60
 
 - sc-bad-sp: check f->esp's value, but I can not recognize this type of bad address.
 
-- sc-bad-arg: check f->esp's value
+- sc-bad-arg: check f->esp's value if is valid.
 
 - exec-bound-2: check esp's value, but I can not kown whether this address is bad!!
 
@@ -28,7 +28,8 @@ must use argument -v -k -t 60
 
 ### Write a syscall
 
-when wiite the callback function for syscall, we need to add its implement (as well as resister) in `syscall_init`.
+
+when wiite the callback function for syscall, we need to add its implement (as well as resister) in `syscall_init` which is in userprog/syscall.c (most of code we need to write in this project is in this file).
 
 ```c
 
@@ -59,6 +60,7 @@ void ExitStatus(int status){
 ```
 
 The syscall parameter arguments was stored in `f->esp`. The order and type of them can be seen in lib/user/syscall.c.
+The return value of syscall was put in `f->eax`.
 
 ```c
 void IExit(struct intr_frame * f)
