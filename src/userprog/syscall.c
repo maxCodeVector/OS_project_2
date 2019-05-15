@@ -3,8 +3,12 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-
 static void syscall_handler (struct intr_frame *);
+
+//======
+
+CALL_PROC call_arr[MAXCALL];
+void system_write(struct intr_frame* f);
 
 void
 syscall_init (void) 
@@ -20,6 +24,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  int No = *(int*)(f->esp);
+  if(call_arr[No] != NULL){
+    call_arr[No](f);
+  }
   printf ("system call!\n");
   thread_exit ();
 }
