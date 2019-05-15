@@ -23,3 +23,20 @@ syscall_handler (struct intr_frame *f UNUSED)
   printf ("system call!\n");
   thread_exit ();
 }
+
+void 
+system_write(struct intr_frame* f){
+   int *esp = (int*)f->esp;
+  // if(!is_user_vaddr(esp+7))
+    // ExitStatus(-1);
+  int fd = *(esp+1);
+  char * buffer = (char*)*(esp+2);
+  unsigned int size = *(esp+3);
+
+  if(fd==1){
+    putbuf(buffer, size);
+    f->eax = 0;
+  }else{
+    printf("I only can print in console!\n");
+  }
+}
