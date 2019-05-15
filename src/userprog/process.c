@@ -18,9 +18,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-#include <string.h>
-#include "threads/synch.h"
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -41,12 +38,8 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-
-  char* real_name=NULL, *save_ptr=NULL;
-  real_name = strtok_r(file_name, " ", &save_ptr);
-
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -66,35 +59,7 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  // =============================
-  char* token=NULL, *save_ptr=NULL;
-  token = strtok_r(file_name, " ", &save_ptr);
-  success = load (token, &if_.eip, &if_.esp);
-  char* esp_tmp = (char*)if_.esp;
-  char* arg[32];
-  int i, n=0;
-  for(;token!=NULL;token=strtok_r(NULL, " ", &save_ptr)){
-    esp_tmp -= strlen(token)+1;
-    strlcpy(esp_tmp, token, strlen(token)+2);
-    arg[n++] = esp_tmp;
-  }
-  while((int)esp_tmp%4!=0){
-    esp_tmp--;
-  }
-  int *p = esp_tmp -4;
-  *p -- = 0;
-  for(i=n-1;i>=0;i--){
-  *p-- = (int*)arg[i];
-  }
-  *p--=p+1;
-  *p-- = n;
-  *p=0;
-  esp_tmp = p;
-  if_.esp = esp_tmp;
-// =================================
-
-
-  // success = load (file_name, &if_.eip, &if_.esp);
+  success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -122,18 +87,8 @@ start_process (void *file_name_)
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) 
-{ 
-//     struct semaphore* to_wait = find_thread_by_tid(child_tid)->wait_child;
-//     // thread_set_priority(PRI_MIN);
-//     if(to_wait!=NULL){
-//       to_wait->value = 0;
-//       sema_down(to_wait);
-//     }  
-    struct thread* t = find_thread_by_tid(child_tid);
-    while( t->tid==child_tid && t->status!=THREAD_DYING ){
-      thread_yield();
-    }
-    return -1;
+{
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -155,11 +110,9 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      printf("%s: exit(%d)\n", cur->name, cur->rtv);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-      
     }
 }
 
@@ -242,7 +195,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, char* file_name);
+static bool setup_stack (void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -349,7 +302,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, file_name))
+  if (!setup_stack (esp))
     goto done;
 
   /* Start address. */
@@ -474,7 +427,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp, char* file_name) 
+setup_stack (void **esp) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -483,9 +436,8 @@ setup_stack (void **esp, char* file_name)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success){
+      if (success)
         *esp = PHYS_BASE;
-      }
       else
         palloc_free_page (kpage);
     }
