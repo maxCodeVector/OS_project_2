@@ -37,9 +37,14 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  /* concate file name into real file name.*/
+  char *file_name_only;
+  char *save_ptr;
+  file_name_only = malloc(strlen(file_name)+1);
+  strlcpy (file_name_only, file_name, strlen(file_name)+1);
+  file_name_only = strtok_r (file_name_only," ",&save_ptr);  // get the thread name
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name_only, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -59,12 +64,63 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  char * file_name_copy = malloc(strlen(file_name_)+1);
+  char *save_pr;
+  char * real_file_name;
+  strlcpy(file_name_copy, file_name_, strlen(file_name_)+1);
+  real_file_name = strtok_r(file_name_copy," ",&save_pr);
+  success = load (real_file_name, &if_.eip, &if_.esp);
 
+  free(file_name_copy);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+    //================need to operate esp to store arguments
+  else{
+      char* argv[128];
+      int argc = 0;
+      file_name = strtok_r(NULL," ",&save_pr);
+      while(file_name!=NULL){
+        argv[argc] = file_name;
+        argc ++;
+      } // cut the parameter , stored in argv
+
+      // copy argv to esp, and then update argv with esp's value
+      for(int i=argc-1;i>=0;i--){
+        if_.esp -= (strlen(argv[i]) + 1);
+        strlcpy(if_.esp, argv[i], strlen(argv[i])+1);
+        argv[i] = if_.esp;
+      }
+
+      // make it word align
+      while((int)(if_.esp) % 4 != 0){
+        if_.esp --;
+      }
+      // the address for last arguments (argv[argc]) should be zero
+      (int*)if_.esp --;
+      *(int*)if_.esp = 0;
+      // put the address for each arguments in esp      
+      for(int i=argc-1;i>=0;i++){
+        (int*)if_.esp --;
+        *(char*)if_.esp = argv[i];
+      }
+      // put the address of start of argument to esp
+      int* argv_addr = if_.esp;
+      (int*) if_.esp --;
+      *(int*)if_.esp = argv_addr;
+      // put argc to esp
+      (int*) if_.esp --;
+      *(int*)if_.esp = argc;
+      // the last position should be zero, the is the final value of esp 
+      (int*) if_.esp --;
+      *(int*)if_.esp = 0;
+
+  }
+
+
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,6 +144,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  for(int i=0;i<1000;i++){
+    int a=i;
+  }
   return -1;
 }
 
