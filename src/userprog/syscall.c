@@ -15,6 +15,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  int No = *(int*)(f->esp);
+  if(call_arr[No] != NULL){
+    call_arr[No](f);
+  }
   printf ("system call!\n");
   thread_exit ();
 }
