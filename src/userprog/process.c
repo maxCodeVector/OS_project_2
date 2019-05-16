@@ -253,11 +253,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Open executable file. */
   file = filesys_open (real_file_name);
 
-<<<<<<< HEAD
-  // free the allocated memory
-  free(real_file_name);
-=======
->>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", real_file_name);
@@ -479,11 +474,7 @@ setup_stack (void **esp, char* file_name)
       else
         palloc_free_page (kpage);
     }
-<<<<<<< HEAD
-    //================need to operate esp to store arguments
-=======
     //================need to operate esp to store arguments ===========
->>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
   if(success){
       char* argv[128];
       int argc = 0;
@@ -493,11 +484,7 @@ setup_stack (void **esp, char* file_name)
       strlcpy(all_arguments, file_name, strlen(file_name)+1);
 
       all_arguments = strtok_r(all_arguments," ",&save_pr);
-<<<<<<< HEAD
-      char* argument = all_arguments; // this is the first arguments
-=======
       char* argument = all_arguments; // this is the first argument
->>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
       while(argument!=NULL){
         argv[argc] =argument;
         argc ++;
@@ -511,12 +498,9 @@ setup_stack (void **esp, char* file_name)
         argv[i] = *esp;
       }
 
-<<<<<<< HEAD
-=======
   // ==========now we can free all-arguments since the value of it has copy to esp ============
       free(all_arguments);
 
->>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
       // =========== make it word align =============
       while((int)(*esp) % 4 != 0){
         *esp = *esp - 1;
