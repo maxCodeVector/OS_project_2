@@ -97,11 +97,19 @@ start_process (void *file_name_)
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) 
-{
-  for(int i=0;i<1000000;i++){
-    thread_yield();
-  }
-  return -1;
+{ 
+//     struct semaphore* to_wait = find_thread_by_tid(child_tid)->wait_child;
+//     // thread_set_priority(PRI_MIN);
+//     if(to_wait!=NULL){
+//       to_wait->value = 0;
+//       sema_down(to_wait);
+//     }  
+    struct thread* t = find_thread_by_tid(child_tid);
+    while( t->tid==child_tid && t->status!=THREAD_DYING ){
+      thread_yield();
+    }
+    // =========now just busy waiting===============
+    return t->rtv;
 }
 
 /* Free the current process's resources. */
@@ -123,6 +131,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+      printf("%s: exit(%d)\n", cur->name,cur->rtv);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -244,8 +253,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Open executable file. */
   file = filesys_open (real_file_name);
 
+<<<<<<< HEAD
   // free the allocated memory
   free(real_file_name);
+=======
+>>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", real_file_name);
@@ -264,6 +276,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: error loading executable\n", real_file_name);
       goto done; 
     }
+
+  // now can free the allocated memory since we need not it yet
+  free(real_file_name);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -464,7 +479,11 @@ setup_stack (void **esp, char* file_name)
       else
         palloc_free_page (kpage);
     }
+<<<<<<< HEAD
     //================need to operate esp to store arguments
+=======
+    //================need to operate esp to store arguments ===========
+>>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
   if(success){
       char* argv[128];
       int argc = 0;
@@ -474,7 +493,11 @@ setup_stack (void **esp, char* file_name)
       strlcpy(all_arguments, file_name, strlen(file_name)+1);
 
       all_arguments = strtok_r(all_arguments," ",&save_pr);
+<<<<<<< HEAD
       char* argument = all_arguments; // this is the first arguments
+=======
+      char* argument = all_arguments; // this is the first argument
+>>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
       while(argument!=NULL){
         argv[argc] =argument;
         argc ++;
@@ -488,6 +511,12 @@ setup_stack (void **esp, char* file_name)
         argv[i] = *esp;
       }
 
+<<<<<<< HEAD
+=======
+  // ==========now we can free all-arguments since the value of it has copy to esp ============
+      free(all_arguments);
+
+>>>>>>> b8c54d42fb1b52e5d2515a06e7664e2c959d4dfb
       // =========== make it word align =============
       while((int)(*esp) % 4 != 0){
         *esp = *esp - 1;
@@ -500,17 +529,10 @@ setup_stack (void **esp, char* file_name)
         *esp  = *esp - 4;
         *((int*)(*esp)) = argv[i];
       }
-
-
-
-      // put the address of start of argument to esp
+      // put the address of start of arguments to esp
       int* argv_addr = *esp;
       *esp  = *esp - 4;
       *(int*)*esp = argv_addr;
-
-
-
-
       // put argc to esp
       *esp  = *esp - 4;
       *(int*)*esp = argc;
