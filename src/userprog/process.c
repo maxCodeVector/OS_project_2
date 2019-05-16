@@ -18,9 +18,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-#include <string.h>
-#include "threads/synch.h"
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -41,18 +38,18 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-
-  // must make a copy to make sure doesnot mistake 
-  char* file_np2 = (char*)malloc( (strlen(file_name)+1)*sizeof(char) );
-  strlcpy(file_np2, file_name, strlen(file_name)+1);
-
-  char* real_name, *save_ptr;
-  real_name = strtok_r(file_np2, " ", &save_ptr);  
-
+  // =====================================
+  /* concate file name into real file name.*/
+  char *file_name_only;
+  char *save_ptr;
+  file_name_only = malloc(strlen(file_name)+1);
+  strlcpy (file_name_only, file_name, strlen(file_name)+1);
+  file_name_only = strtok_r (file_name_only," ",&save_ptr);  // get the thread name
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name_only, PRI_DEFAULT, start_process, fn_copy);
 
-  free(file_np2);
+// ========== free the allocated memory ================
+  free(file_name_only);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -73,41 +70,12 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  // =============================
-  char* token=NULL, *save_ptr=NULL;
-  token = strtok_r(file_name, " ", &save_ptr);
-  success = load (token, &if_.eip, &if_.esp);
-  char* esp_tmp = (char*)if_.esp;
-  char* arg[32];
-  int i, n=0;
-  for(;token!=NULL;token=strtok_r(NULL, " ", &save_ptr)){
-    esp_tmp -= strlen(token)+1;
-    strlcpy(esp_tmp, token, strlen(token)+1);  // why document said +2?
-    arg[n++] = esp_tmp;
-  }
-  while((int)esp_tmp%4!=0){
-    esp_tmp--;
-  }
-  int *p = esp_tmp -4;
-  *p -- = 0;
-  for(i=n-1;i>=0;i--){
-  *p-- = (int*)arg[i];
-  }
-  *p--=p+1;
-  *p-- = n;
-  *p=0;
-  esp_tmp = p;
-  if_.esp = esp_tmp;
-// =================================
 
-
-  // success = load (file_name, &if_.eip, &if_.esp);
-
+  success = load (file_name, &if_.eip, &if_.esp);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
-
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -162,11 +130,10 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      printf("%s: exit(%d)\n", cur->name, cur->rtv);
+      printf("%s: exit(%d)\n", cur->name,cur->rtv);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-      
     }
 }
 
@@ -275,11 +242,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+
+  // ================ get the real file name to load it from disk to memory ===============
+  char * real_file_name= malloc(strlen(file_name)+1);
+  char *save_pr;
+  strlcpy(real_file_name, file_name, strlen(file_name)+1);
+  real_file_name = strtok_r(real_file_name, " ", &save_pr);
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (real_file_name);
+
+  // free the allocated memory
+  free(real_file_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", real_file_name);
       goto done; 
     }
 
@@ -292,7 +269,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", real_file_name);
       goto done; 
     }
 
@@ -490,12 +467,60 @@ setup_stack (void **esp, char* file_name)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success){
+      if (success)
         *esp = PHYS_BASE;
-      }
       else
         palloc_free_page (kpage);
     }
+    //================need to operate esp to store arguments
+  if(success){
+      char* argv[128];
+      int argc = 0;
+
+      char * all_arguments = malloc(strlen(file_name)+1);
+      char *save_pr;
+      strlcpy(all_arguments, file_name, strlen(file_name)+1);
+
+      all_arguments = strtok_r(all_arguments," ",&save_pr);
+      char* argument = all_arguments; // this is the first arguments
+      while(argument!=NULL){
+        argv[argc] =argument;
+        argc ++;
+        argument = strtok_r(NULL," ",&save_pr);
+      } // cut the parameter , stored in argv and increase argc
+
+      // copy argv to esp, and then re-update argv with esp's value
+      for(int i=argc-1;i>=0;i--){
+        *esp -= (strlen(argv[i]) + 1);
+        strlcpy(*esp, argv[i], strlen(argv[i])+1);
+        argv[i] = *esp;
+      }
+
+      // =========== make it word align =============
+      while((int)(*esp) % 4 != 0){
+        *esp = *esp - 1;
+      }
+      // the address for last arguments (argv[argc]) should be zero
+      *esp  = *esp - 4;
+      *((int*)*esp) = 0;
+      // put the address for each arguments in esp      
+      for(int i=argc-1;i>=0;i--){
+        *esp  = *esp - 4;
+        *((int*)(*esp)) = argv[i];
+      }
+      // put the address of start of argument to esp
+      int* argv_addr = *esp;
+      *esp  = *esp - 4;
+      *(int*)*esp = argv_addr;
+      // put argc to esp
+      *esp  = *esp - 4;
+      *(int*)*esp = argc;
+      // the last position should be zero, the is the final value of esp 
+      *esp  = *esp - 4;
+      *(int*)*esp = 0;
+
+  }
+
   return success;
 }
 
