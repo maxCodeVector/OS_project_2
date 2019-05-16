@@ -98,8 +98,8 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  for(int i=0;i<1000;i++){
-    int a=i;
+  for(int i=0;i<1000000;i++){
+    thread_yield();
   }
   return -1;
 }
@@ -498,12 +498,19 @@ setup_stack (void **esp, char* file_name)
       // put the address for each arguments in esp      
       for(int i=argc-1;i>=0;i--){
         *esp  = *esp - 4;
-        *((char*)(*esp)) = argv[i];
+        *((int*)(*esp)) = argv[i];
       }
+
+
+
       // put the address of start of argument to esp
       int* argv_addr = *esp;
       *esp  = *esp - 4;
       *(int*)*esp = argv_addr;
+
+
+
+
       // put argc to esp
       *esp  = *esp - 4;
       *(int*)*esp = argc;

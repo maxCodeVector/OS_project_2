@@ -67,8 +67,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     printf("have not implemenyt this system call\n");
     ExitStatus(-1);
   }
-  pfn[No](f);
-  // printf ("system call!\n");
+  printf ("system call!\n");
+  // pfn[No](f);
   // thread_exit ();
 }
 
@@ -99,7 +99,7 @@ void IWrite(struct intr_frame * f)
   unsigned int size = *(esp+3);
 
   if(fd==1){
-    putbuf(buffer, size);
+    printf("%s", buffer);
     f->eax = 0;
   }else{
     printf("I only can print in console!\n");
