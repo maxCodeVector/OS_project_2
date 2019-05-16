@@ -37,6 +37,8 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+
+  // =====================================
   /* concate file name into real file name.*/
   char *file_name_only;
   char *save_ptr;
@@ -45,6 +47,10 @@ process_execute (const char *file_name)
   file_name_only = strtok_r (file_name_only," ",&save_ptr);  // get the thread name
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_only, PRI_DEFAULT, start_process, fn_copy);
+
+// ========== free the allocated memory ================
+  free(file_name_only);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -64,64 +70,12 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  char * file_name_copy = malloc(strlen(file_name_)+1);
-  char *save_pr;
-  char * real_file_name;
-  strlcpy(file_name_copy, file_name_, strlen(file_name_)+1);
-  real_file_name = strtok_r(file_name_copy," ",&save_pr);
-  success = load (real_file_name, &if_.eip, &if_.esp);
 
-  free(file_name_copy);
+  success = load (file_name, &if_.eip, &if_.esp);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
-
-    //================need to operate esp to store arguments
-  else{
-      char* argv[128];
-      int argc = 0;
-      file_name = strtok_r(NULL," ",&save_pr);
-      while(file_name!=NULL){
-        argv[argc] = file_name;
-        argc ++;
-      } // cut the parameter , stored in argv
-
-      // copy argv to esp, and then update argv with esp's value
-      for(int i=argc-1;i>=0;i--){
-        if_.esp -= (strlen(argv[i]) + 1);
-        strlcpy(if_.esp, argv[i], strlen(argv[i])+1);
-        argv[i] = if_.esp;
-      }
-
-      // make it word align
-      while((int)(if_.esp) % 4 != 0){
-        if_.esp --;
-      }
-      // the address for last arguments (argv[argc]) should be zero
-      (int*)if_.esp --;
-      *(int*)if_.esp = 0;
-      // put the address for each arguments in esp      
-      for(int i=argc-1;i>=0;i++){
-        (int*)if_.esp --;
-        *(char*)if_.esp = argv[i];
-      }
-      // put the address of start of argument to esp
-      int* argv_addr = if_.esp;
-      (int*) if_.esp --;
-      *(int*)if_.esp = argv_addr;
-      // put argc to esp
-      (int*) if_.esp --;
-      *(int*)if_.esp = argc;
-      // the last position should be zero, the is the final value of esp 
-      (int*) if_.esp --;
-      *(int*)if_.esp = 0;
-
-  }
-
-
-
-
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -254,7 +208,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char* file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -280,11 +234,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+
+  // ================ get the real file name to load it from disk to memory ===============
+  char * real_file_name= malloc(strlen(file_name)+1);
+  char *save_pr;
+  strlcpy(real_file_name, file_name, strlen(file_name)+1);
+  real_file_name = strtok_r(real_file_name, " ", &save_pr);
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (real_file_name);
+
+  // free the allocated memory
+  free(real_file_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", real_file_name);
       goto done; 
     }
 
@@ -297,7 +261,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", real_file_name);
       goto done; 
     }
 
@@ -361,7 +325,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -486,7 +450,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char* file_name) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -500,6 +464,55 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+    //================need to operate esp to store arguments
+  if(success){
+      char* argv[128];
+      int argc = 0;
+
+      char * all_arguments = malloc(strlen(file_name)+1);
+      char *save_pr;
+      strlcpy(all_arguments, file_name, strlen(file_name)+1);
+
+      all_arguments = strtok_r(all_arguments," ",&save_pr);
+      char* argument = all_arguments; // this is the first arguments
+      while(argument!=NULL){
+        argv[argc] =argument;
+        argc ++;
+        argument = strtok_r(NULL," ",&save_pr);
+      } // cut the parameter , stored in argv and increase argc
+
+      // copy argv to esp, and then re-update argv with esp's value
+      for(int i=argc-1;i>=0;i--){
+        *esp -= (strlen(argv[i]) + 1);
+        strlcpy(*esp, argv[i], strlen(argv[i])+1);
+        argv[i] = *esp;
+      }
+
+      // =========== make it word align =============
+      while((int)(*esp) % 4 != 0){
+        *esp = *esp - 1;
+      }
+      // the address for last arguments (argv[argc]) should be zero
+      *esp  = *esp - 4;
+      *((int*)*esp) = 0;
+      // put the address for each arguments in esp      
+      for(int i=argc-1;i>=0;i--){
+        *esp  = *esp - 4;
+        *((char*)(*esp)) = argv[i];
+      }
+      // put the address of start of argument to esp
+      int* argv_addr = *esp;
+      *esp  = *esp - 4;
+      *(int*)*esp = argv_addr;
+      // put argc to esp
+      *esp  = *esp - 4;
+      *(int*)*esp = argc;
+      // the last position should be zero, the is the final value of esp 
+      *esp  = *esp - 4;
+      *(int*)*esp = 0;
+
+  }
+
   return success;
 }
 
