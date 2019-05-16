@@ -4,132 +4,201 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-// ====================
+// =========== nessary include =========
 #include "devices/shutdown.h"
 #include "threads/vaddr.h"
 #include "process.h"
 #include "threads/palloc.h"
 #define MAXCALL 20
 
-static void syscall_handler (struct intr_frame *);
+static void syscall_handler(struct intr_frame *);
 
-// =========================
-void ExitStatus(int status);
-void IWrite(struct intr_frame * f);
-void IExit(struct intr_frame * f);
-void IHALT(struct intr_frame * f);
-void IEXEC(struct intr_frame * f);
-void IWAIT(struct intr_frame * f);
-typedef void(*CALL_PROC)(struct  intr_frame*);
-CALL_PROC pfn[MAXCALL];
+// =============all syscall project 2 need to implement ============
 
+int syscall_HALT(struct intr_frame *f);     /* Halt the operating system. */
+int syscall_EXIT(struct intr_frame *f);     /* Terminate this process. */
+int syscall_EXEC(struct intr_frame *f);     /* Start another process. */
+int syscall_WAIT(struct intr_frame *f);     /* Wait for a child process to die. */
+int syscall_CREATE(struct intr_frame *f);   /* Create a file. */
+int syscall_REMOVE(struct intr_frame *f);   /* Delete a file. */
+int syscall_OPEN(struct intr_frame *f);     /* Open a file. */
+int syscall_FILESIZE(struct intr_frame *f); /* Obtain a file's size. */
+int syscall_READ(struct intr_frame *f);     /* Read from a file. */
+int syscall_WRITE(struct intr_frame *f);    /* Write to a file. */
+int syscall_SEEK(struct intr_frame *f);     /* Change position in a file. */
+int syscall_TELL(struct intr_frame *f);     /* Report current position in a file. */
+int syscall_CLOSE(struct intr_frame *f);    /* Close a file. */
 
+typedef int (*syscall_hander_function)(struct intr_frame *);
+void process_exit_with_status(int status); // this function make current thread exit itself with exit code: status
+syscall_hander_function pfn[MAXCALL];
+
+// this funcion check address if valid, it need to implement more completely later
 bool is_valid_addr(const void *vaddr)
 {
-	void *page_ptr = pagedir_get_page(thread_current()->pagedir, vaddr);
+  void *page_ptr = pagedir_get_page(thread_current()->pagedir, vaddr);
 
-	if (!is_user_vaddr(vaddr) || page_ptr == NULL)
-	{
+  if (!is_user_vaddr(vaddr) || page_ptr == NULL)
+  {
     return false;
-	}
-	return true;
+  }
+  return true;
 }
 
-
-void
-syscall_init (void) 
+void syscall_init(void)
 {
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
   int i;
-  for(i=0;i<MAXCALL;i++){
+  for (i = 0; i < MAXCALL; i++)
+  {
     pfn[i] = NULL;
   }
-  pfn[SYS_WRITE] = IWrite;
-  pfn[SYS_EXIT] = IExit;
-  pfn[SYS_HALT] = IHALT;
-  pfn[SYS_EXEC] = IEXEC;
-  pfn[SYS_WAIT] = IWAIT;
+  /** 
+ * ========those lines register behaviour hander for each syscall==========
+ * just need to write the concrete behaviour for these functions, then
+ * when syscall come, pc will konw its syscall number and can invoke
+ * the specific function to handle the syscall
+*/
+  pfn[SYS_HALT] = syscall_HALT;
+  pfn[SYS_EXIT] = syscall_EXIT;
+  pfn[SYS_EXEC] = syscall_EXEC;
+  pfn[SYS_WAIT] = syscall_WAIT;
+  pfn[SYS_CREATE] = syscall_CREATE;
+  pfn[SYS_REMOVE] = syscall_REMOVE;
+  pfn[SYS_OPEN] = syscall_OPEN;
+  pfn[SYS_FILESIZE] = syscall_FILESIZE;
+  pfn[SYS_READ] = syscall_READ;
+  pfn[SYS_WRITE] = syscall_WRITE;
+  pfn[SYS_SEEK] = syscall_SEEK;
+  pfn[SYS_TELL] = syscall_TELL;
+  pfn[SYS_CLOSE] = syscall_CLOSE;
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler(struct intr_frame *f UNUSED)
 {
-  if( !is_valid_addr(f->esp) ){
-    ExitStatus(-1);
+  if (!is_valid_addr(f->esp))
+  {
+    process_exit_with_status(-1);
   }
-  int No = *(int*)(f->esp);
-  if(No>MAXCALL || No < 0)
+  int No = *(int *)(f->esp);
+  if (No >= MAXCALL || No < 0)
   {
     // printf("We don't have this system call!\n");
-    ExitStatus(-1);
+    process_exit_with_status(-1);
   }
-  if(pfn[No] == NULL)
+  if (pfn[No] == NULL)
   {
     printf("have not implemenyt this system call\n");
-    ExitStatus(-1);
+    process_exit_with_status(-1);
   }
-  pfn[No](f);
+  f->eax = pfn[No](f); // put return value of syscall in f->eax, default return value is 0
   // printf ("system call!\n");
   // thread_exit ();
 }
 
-void ExitStatus(int status){
-  struct  thread* cur = thread_current();
-  cur -> rtv = status;
+// this function make current thread exit itself with exit code: status
+void process_exit_with_status(int status)
+{
+  struct thread *cur = thread_current();
+  cur->rtv = status;
   thread_exit();
 }
 
-void IExit(struct intr_frame * f)
-{
-  int *esp = (int*)f->esp;
-  if(!is_user_vaddr(esp+1))
-    ExitStatus(-1);
-  else{
-    int rtv = *(esp+1);
-    ExitStatus(rtv);
-  }
-}
-
-void IWrite(struct intr_frame * f)
-{
-  int *esp = (int*)f->esp;
-  // if(!is_user_vaddr(esp+7))
-    // ExitStatus(-1);
-  int fd = *(esp+1);
-  char * buffer = (char*)*(esp+2);
-  unsigned int size = *(esp+3);
-
-  if(fd==1){
-    putbuf(buffer, size);
-    f->eax = 0;
-  }else{
-    printf("I only can print in console!\n");
-  }
-
-}
-
-void IHALT(struct intr_frame * f)
+int syscall_HALT(struct intr_frame *f) /* Halt the operating system. */
 {
   shutdown_power_off();
-  f->eax = 0;
+  return 0;
 }
 
+int syscall_EXIT(struct intr_frame *f) /* Terminate this process. */
+{
+  int *esp = (int *)f->esp;
+  if (!is_valid_addr(esp + 1))
+  {
+    process_exit_with_status(-1);
+  }
+  else
+  {
+    int rtv = *(esp + 1);
+    process_exit_with_status(rtv);
+  }
+  return 0;
+}
 
-void IEXEC(struct intr_frame * f){
-
-  int *esp = (int*)f->esp;
-  if(!is_user_vaddr(esp+1))
-    ExitStatus(-1);
-  else{
-    char* file = *(esp+1);
-    f->eax = process_execute(file);
+int syscall_EXEC(struct intr_frame *f) /* Start another process. */
+{
+  int *esp = (int *)f->esp;
+  if (!is_valid_addr(esp + 1))
+  {
+    process_exit_with_status(-1);
+    return -1;
+  }
+  else
+  {
+    char *file = *(esp + 1);
+    return process_execute(file);
   }
 }
-void IWAIT(struct intr_frame * f){
-  int *esp = (int*)f->esp;
-  // if(!is_user_vaddr(esp+7))
-    // ExitStatus(-1);
-  tid_t wait_id = *(esp+1);
-  process_wait(wait_id);
 
+int syscall_WAIT(struct intr_frame *f) /* Wait for a child process to die. */
+{
+  int *esp = (int *)f->esp;
+  // if(!is_user_vaddr(esp+7))
+  // ExitStatus(-1);
+  tid_t wait_id = *(esp + 1);
+  process_wait(wait_id);
+  return 0;
+}
+
+int syscall_CREATE(struct intr_frame *f) /* Create a file. */
+{
+}
+
+int syscall_REMOVE(struct intr_frame *f) /* Delete a file. */
+{
+}
+
+int syscall_OPEN(struct intr_frame *f) /* Open a file. */
+{
+}
+
+int syscall_FILESIZE(struct intr_frame *f) /* Obtain a file's size. */
+{
+}
+
+int syscall_READ(struct intr_frame *f) /* Read from a file. */
+{
+}
+
+int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
+{
+  int *esp = (int *)f->esp;
+  // if(!is_user_vaddr(esp+7))
+  // ExitStatus(-1);
+  int fd = *(esp + 1);
+  char *buffer = (char *)*(esp + 2);
+  unsigned int size = *(esp + 3);
+
+  if (fd == 1) // means it write to console (stdout)
+  {
+    putbuf(buffer, size);
+    f->eax = 0;
+  }
+  else
+  {
+    printf("I only can print in console!\n");
+  }
+  return 0;
+}
+
+int syscall_SEEK(struct intr_frame *f) /* Change position in a file. */
+{
+}
+
+int syscall_TELL(struct intr_frame *f) /* Report current position in a file. */
+{
+}
+int syscall_CLOSE(struct intr_frame *f) /* Close a file. */
+{
 }
