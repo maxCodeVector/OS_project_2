@@ -182,6 +182,13 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  // =========put the new process to current process's child list=============
+  // now don't konow is there are race condition
+  struct thread* cur = thread_current();
+  list_push_back( &(cur->proc).child, &(t->proc).child_elem);
+  // update new thread's id in struct process
+  (t->proc).pid = tid;
+  (t->proc).father = thread_current();
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -446,6 +453,18 @@ is_thread (struct thread *t)
   return t != NULL && t->magic == THREAD_MAGIC;
 }
 
+// ============initial process============
+void init_process(struct process* proc)
+{
+  list_init(&proc->child);
+  sema_init(&proc->wait, 0);
+  sema_init(&proc->wait_anyone, 0);
+
+}
+
+
+
+
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
@@ -466,6 +485,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   #ifdef USERPROG
   t->rtv = 0;
+  init_process(&t->proc);
   #endif
 
 
@@ -473,6 +493,9 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
+
+
+
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
    returns a pointer to the frame's base. */
@@ -607,6 +630,22 @@ struct thread* find_thread_by_tid(tid_t id)
     
     intr_set_level(old_level);
     return res;
+}
+
+bool is_child(tid_t id)
+{
+  struct list_elem *e;
+  struct thread* t = thread_current();
+ for (e = list_begin( &(t->proc).child ); e != list_end( &(t->proc).child );
+         e = list_next(e)) {
+        struct process *p = list_entry(e,
+        struct process, child_elem);
+        if(p->pid==id){
+            return true;
+        }
+            
+  }
+  return false;
 }
 
 

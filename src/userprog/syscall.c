@@ -36,14 +36,26 @@ syscall_hander_function pfn[MAXCALL];
 // this funcion check address if valid, it need to implement more completely later
 bool is_valid_addr(const void *vaddr)
 {
-  void *page_ptr = pagedir_get_page(thread_current()->pagedir, vaddr);
+  // void *page_ptr = 
 
-  if (!is_user_vaddr(vaddr) || page_ptr == NULL)
+  if (!is_user_vaddr(vaddr) || pagedir_get_page(thread_current()->pagedir, vaddr) == NULL)
   {
     return false;
   }
   return true;
 }
+
+// get the arguments in esp and put it in address arg, also each time invoke it need to check if address is valid
+void pop_stack(int* esp, int* arg, int offset){
+  if( is_valid_addr(esp+offset) ){
+    *arg = *(esp+offset);
+  }else
+  {
+    process_exit_with_status(-1);
+  }
+}
+
+
 
 void syscall_init(void)
 {
@@ -114,31 +126,46 @@ int syscall_HALT(struct intr_frame *f) /* Halt the operating system. */
 int syscall_EXIT(struct intr_frame *f) /* Terminate this process. */
 {
   int *esp = (int *)f->esp;
-  if (!is_valid_addr(esp + 1))
-  {
-    process_exit_with_status(-1);
-  }
-  else
-  {
-    int rtv = *(esp + 1);
-    process_exit_with_status(rtv);
-  }
+  int rtv;
+  pop_stack(esp, &rtv, 1);
+  // if (!is_valid_addr(esp + 1))
+  // {
+  //   process_exit_with_status(-1);
+  // }
+  // else
+  // {
+  // int rtv = *(esp + 1);
+  process_exit_with_status(rtv);
+  // }
   return 0;
 }
 
 int syscall_EXEC(struct intr_frame *f) /* Start another process. */
 {
   int *esp = (int *)f->esp;
-  if (!is_valid_addr(esp + 1))
-  {
+  char *file_name;
+  pop_stack(esp, &file_name, 1);
+  if( !is_valid_addr(file_name) ){
     process_exit_with_status(-1);
     return -1;
   }
-  else
-  {
-    char *file = *(esp + 1);
-    return process_execute(file);
-  }
+
+  /* Open executable file and check if it is exist */
+  char * name_copy = malloc (strlen(file_name)+1);
+  char* argument_ptr;
+	strlcpy(name_copy, file_name, strlen(file_name) + 1);
+
+  name_copy = strtok_r(name_copy, " ", &argument_ptr);
+  struct file* file = filesys_open (name_copy);
+  if (file == NULL) 
+    {
+      process_exit_with_status(-1);
+      return 0;
+    }else{
+      file_close(file);
+      return process_execute(file_name);
+    }
+
 }
 
 int syscall_WAIT(struct intr_frame *f) /* Wait for a child process to die. */
@@ -146,9 +173,9 @@ int syscall_WAIT(struct intr_frame *f) /* Wait for a child process to die. */
   int *esp = (int *)f->esp;
   // if(!is_user_vaddr(esp+7))
   // ExitStatus(-1);
-  tid_t wait_id = *(esp + 1);
-  process_wait(wait_id);
-  return 0;
+  tid_t wait_id;
+  pop_stack(esp, &wait_id, 1);
+  return process_wait(wait_id);
 }
 
 int syscall_CREATE(struct intr_frame *f) /* Create a file. */
@@ -176,9 +203,13 @@ int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
   int *esp = (int *)f->esp;
   // if(!is_user_vaddr(esp+7))
   // ExitStatus(-1);
-  int fd = *(esp + 1);
-  char *buffer = (char *)*(esp + 2);
-  unsigned int size = *(esp + 3);
+  int fd;
+  char *buffer;
+  unsigned int size;
+  pop_stack(esp, &fd, 1);
+  pop_stack(esp, &buffer, 2);
+  pop_stack(esp, &size, 3);
+  // unsigned int size = *(esp + 3);
 
   if (fd == 1) // means it write to console (stdout)
   {
