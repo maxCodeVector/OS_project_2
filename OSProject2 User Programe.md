@@ -31,9 +31,44 @@ must use argument -v -k -t 60
 
 - need to synchronized when process_start() load the executable file since there may be more than 1 process want to execute the same file.
 
+### 1.3 Synchronization
+
+During the function `laod`, we allocate page directory for the file, open the file, push the argument into the stack. According to **Task3**, the file operation syscalls do not call multiple filesystem functions concurrently. Therefore, we have to keep the file from modified or opened by other processes. We implement it by using `filesys_lock` (defined in `thread.h`which we will explain in **Task3**):
+
+```
+lock_acquire(&filesys_lock);
+//loading the file
+lock_release(&filesys_lock);
+```
+
+Also, according to the **Task3**, while a user process is running, the operating system must ensure that nobody can modify its executable on disk. `file_deny_write(file)` denies writes to this current-running files.
 
 
 
+The invalid memory access include:
+
+- NULL pointer
+- Invalid pointers (which point to unmapped memory locations)
+- Pointers to the kernel’s virtual address space
+
+
+
+##### 2.2.2.1 Check valid address
+
+We implement it in function:
+
+```
+void *is_valid_addr(const void *vaddr)
+{
+	void *page_ptr = NULL;
+	if (!is_user_vaddr(vaddr) || !(page_ptr = pagedir_get_page(thread_current()->pagedir, vaddr)))
+	{
+		exit_process(-1);
+		return 0;
+	}
+	return page_ptr;
+}
+```
 
 
 
