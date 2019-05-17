@@ -157,8 +157,7 @@ int syscall_WAIT(struct intr_frame *f) /* Wait for a child process to die. */
   // ExitStatus(-1);
   tid_t wait_id;
   pop_stack(esp, &wait_id, 1);
-  process_wait(wait_id);
-  return 0;
+  return process_wait(wait_id);
 }
 
 int syscall_CREATE(struct intr_frame *f) /* Create a file. */

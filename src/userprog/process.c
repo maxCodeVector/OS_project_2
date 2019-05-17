@@ -116,6 +116,9 @@ process_wait (tid_t child_tid UNUSED)
 
   struct semaphore* to_wait = &(t->proc).wait;
   sema_down(to_wait);
+  //========remove this child or when some one call wait again it will wait for ever==========
+  list_remove (&t->proc.child_elem);
+
   // thread_set_priority(PRI_MIN);
   /*
   if(to_wait!=NULL){
