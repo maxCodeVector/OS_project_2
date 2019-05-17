@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include "fixed_point.h"
 
+// ===========necessary include==========
+#include "synch.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -19,6 +22,26 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+
+
+/**
+ * struct process, which is in strcut thread, store a semaphore to implement wait(), 
+ * and also store all information about this process such as open file, child process
+ * 
+ * 
+*/
+struct process
+{
+  struct semaphore wait; // to implement wait child
+  struct semaphore wait_anyone; // to implement wait -1
+  struct thread* father;
+  
+  struct list child;
+  struct list_elem child_elem; // list elem for child list.
+  tid_t pid;
+  /* data */
+};
+
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -98,7 +121,11 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int rtv;
+    
 #endif
+//==========add new struct to store process information============
+    struct process proc;  // the process this thread belong to
+
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
@@ -141,5 +168,7 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 struct thread* find_thread_by_tid(tid_t id);
+//check this id process is my child
+bool is_child(tid_t id);
 
 #endif /* threads/thread.h */

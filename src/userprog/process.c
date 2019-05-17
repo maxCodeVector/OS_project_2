@@ -98,18 +98,37 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 { 
-//     struct semaphore* to_wait = find_thread_by_tid(child_tid)->wait_child;
-//     // thread_set_priority(PRI_MIN);
-//     if(to_wait!=NULL){
-//       to_wait->value = 0;
-//       sema_down(to_wait);
-//     }  
-    struct thread* t = find_thread_by_tid(child_tid);
-    while( t->tid==child_tid && t->status!=THREAD_DYING ){
-      thread_yield();
-    }
-    // =========now just busy waiting===============
-    return t->rtv;
+  // =======check if I am your father=========
+  if( !is_child(child_tid) || child_tid==TID_ERROR ){
+    return -1;
+  }
+  if(child_tid == -1){
+    struct thread* cur = thread_current();
+    sema_down( &(cur->proc).wait_anyone );
+    return -1;
+  }
+
+  // =============get the wait child's samephore=======
+  struct thread* t = find_thread_by_tid(child_tid);
+  if(t->status==THREAD_DYING){
+    return -1;
+  }
+
+  struct semaphore* to_wait = &(t->proc).wait;
+  sema_down(to_wait);
+  // thread_set_priority(PRI_MIN);
+  /*
+  if(to_wait!=NULL){
+    to_wait->value = 0;
+    sema_down(to_wait);
+  }  
+  struct thread* t = find_thread_by_tid(child_tid);
+  while( t->tid==child_tid && t->status!=THREAD_DYING ){
+    thread_yield();
+  }
+  // =========now just busy waiting===============
+  */
+  return t->rtv;
 }
 
 /* Free the current process's resources. */
@@ -132,6 +151,12 @@ process_exit (void)
          directory, or our active page directory will be one
          that's been freed (and cleared). */
       printf("%s: exit(%d)\n", cur->name,cur->rtv);
+      //=======wait up waited father if any=======
+      sema_up(&(cur->proc).wait);
+      struct thread* father = (cur->proc).father;
+      if(father!=NULL && father->status != THREAD_DYING){
+        sema_up( &(father->proc).wait_anyone );
+      }
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
