@@ -143,10 +143,28 @@ int syscall_EXIT(struct intr_frame *f) /* Terminate this process. */
 int syscall_EXEC(struct intr_frame *f) /* Start another process. */
 {
   int *esp = (int *)f->esp;
-  char *file;
-  pop_stack(esp, &file, 1);
+  char *file_name;
+  pop_stack(esp, &file_name, 1);
+  if( !is_valid_addr(file_name) ){
+    process_exit_with_status(-1);
+    return -1;
+  }
 
-  return process_execute(file);
+  /* Open executable file and check if it is exist */
+  char * name_copy = malloc (strlen(file_name)+1);
+  char* argument_ptr;
+	strlcpy(name_copy, file_name, strlen(file_name) + 1);
+
+  name_copy = strtok_r(name_copy, " ", &argument_ptr);
+  struct file* file = filesys_open (name_copy);
+  if (file == NULL) 
+    {
+      process_exit_with_status(-1);
+      return 0;
+    }else{
+      file_close(file);
+      return process_execute(file_name);
+    }
 
 }
 
