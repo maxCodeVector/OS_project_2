@@ -253,7 +253,7 @@ search_fd(struct list* files, int fd)
 
 int syscall_READ(struct intr_frame *f) /* Read from a file. */
 {
-  	int ret;
+  int ret;
 	int size;
 	void *buffer;
 	int fd;
