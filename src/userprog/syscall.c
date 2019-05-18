@@ -253,6 +253,38 @@ search_fd(struct list* files, int fd)
 
 int syscall_READ(struct intr_frame *f) /* Read from a file. */
 {
+  	int ret;
+	int size;
+	void *buffer;
+	int fd;
+
+	pop_stack(f->esp, &size, 3);
+	pop_stack(f->esp, &buffer, 2);
+	pop_stack(f->esp, &fd, 1);
+
+	if (!is_valid_addr(buffer))
+		ret = -1;
+
+	if (fd == 0)
+	{
+		int i;
+		uint8_t *buffer = buffer;
+		for (i = 0; i < size; i++)
+			buffer[i] = input_getc();
+		ret = size;
+	}
+	else
+	{
+		struct process_file *pf = search_fd(&thread_current()->opened_files, fd);
+		if (pf == NULL)
+			ret = -1;
+		else
+		{
+			ret = file_read(pf->ptr, buffer, size);
+		}
+	}
+
+	return ret;
 }
 
 int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
