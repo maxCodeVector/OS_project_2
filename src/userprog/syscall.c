@@ -321,14 +321,21 @@ int syscall_SEEK(struct intr_frame *f) /* Change position in a file. */
 {
   int fd;
 	int pos;
-	pop_stack(f->esp, &fd, 2);
-	pop_stack(f->esp, &pos, 1);
-	file_seek(search_fd(&thread_current()->opened_files, pos)->ptr, fd);
+	pop_stack(f->esp, &pos, 2);
+	pop_stack(f->esp, &fd, 1);
+	file_seek(search_fd(&thread_current()->opened_files, fd)->ptr, pos);
 }
 
 int syscall_TELL(struct intr_frame *f) /* Report current position in a file. */
 {
+  int fd;
+	int pos;
+	pop_stack(f->esp, &pos, 2);
+	pop_stack(f->esp, &fd, 1);
+	file_tell(search_fd(&thread_current()->opened_files, fd)->ptr);
 }
 int syscall_CLOSE(struct intr_frame *f) /* Close a file. */
 {
+  int fd;
+  int ret;
 }
