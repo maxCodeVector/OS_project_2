@@ -10,5 +10,7 @@ struct process_file {
 	int fd;
 	struct list_elem elem;
 };
+void process_exit_with_status(int status); // this function make current thread exit itself with exit code: status
+
 // void system_write(struct intr_frame*);
 #endif /* userprog/syscall.h */

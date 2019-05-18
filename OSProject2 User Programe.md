@@ -27,6 +27,35 @@ must use argument -v -k -t 60
 
 
 
+- bad-read: can not read/right/jump address unmapped, add some code in exception.c
+
+```c
+ if(!user)
+  printf ("Page fault at %p: %s error %s page in %s context.\n",
+          fault_addr,
+          not_present ? "not present" : "rights violation",
+          write ? "writing" : "reading",
+          user ? "user" : "kernel");
+
+
+case SEL_UCSEG:
+      /* User's code segment, so it's a user exception, as we
+         expected.  Kill the user process.  */
+
+      //========just exit current process============
+      process_exit_with_status(-1); // this function make current thread exit itself with exit code: status
+```
+
+
+
+- bad-write
+- bad-read2
+- bad-write2
+- bad-jump
+- bad-jump2
+
+
+
 ### The things we need to attension
 
 - need to synchronized when process_start() load the executable file since there may be more than 1 process want to execute the same file.
@@ -69,6 +98,8 @@ void *is_valid_addr(const void *vaddr)
 	return page_ptr;
 }
 ```
+
+**pop_statck():**
 
 
 
@@ -127,3 +158,73 @@ void IExit(struct intr_frame * f)
 }
 
 ```
+
+
+
+**process_wait**:
+
+add struct process in thread.h:
+
+```c
+struct process
+{
+  struct semaphore wait; // to implement wait a specially child, father will wait in this semaphore
+  struct semaphore wait_anyone; // to implement wait(-1)
+  struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
+
+  struct thread* father;
+  
+  struct list child;
+  struct list_elem child_elem; // list elem for child list.
+  tid_t pid;
+  bool is_loaded;
+  /* data */
+};
+
+```
+
+
+
+
+
+
+
+```c
+int
+process_wait (tid_t child_tid UNUSED) 
+{ 
+  // =======check if I am your father=========
+  if( !is_child(child_tid) || child_tid==TID_ERROR ){
+    return -1;
+  }
+  if(child_tid == -1){
+    struct thread* cur = thread_current();
+    sema_down( &(cur->proc).wait_anyone );
+    return -1;
+  }
+
+  // =============get the wait child's samephore=======
+  struct thread* t = find_thread_by_tid(child_tid);
+  if(t->status==THREAD_DYING){
+    return -1;
+  }
+
+  struct semaphore* to_wait = &(t->proc).wait;
+  sema_down(to_wait);
+
+  // thread_set_priority(PRI_MIN);
+  /*
+  if(to_wait!=NULL){
+    to_wait->value = 0;
+    sema_down(to_wait);
+  }  
+  struct thread* t = find_thread_by_tid(child_tid);
+  while( t->tid==child_tid && t->status!=THREAD_DYING ){
+    thread_yield();
+  }
+  // =========now just busy waiting===============
+  */
+  return t->rtv;
+}
+```
+
