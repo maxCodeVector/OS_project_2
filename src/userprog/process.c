@@ -47,12 +47,20 @@ process_execute (const char *file_name)
   file_name_only = strtok_r (file_name_only," ",&save_ptr);  // get the thread name
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_only, PRI_DEFAULT, start_process, fn_copy);
+  //==========sema_down wait_load to make sure load programe success=====
+  sema_down(&thread_current()->proc.wait_load);
 
 // ========== free the allocated memory ================
   free(file_name_only);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  else{
+    // ========when this thread does't load actually, show return -1========= 
+    struct thread* t = find_thread_by_tid(tid);
+    if(t!=NULL && !t->proc.is_loaded )
+      tid = -1;
+  }
   return tid;
 }
 
@@ -72,6 +80,11 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   success = load (file_name, &if_.eip, &if_.esp);
+
+  // ===========notify father load is success=========
+  struct thread* t = thread_current();
+  sema_up(&(t->proc).father->proc.wait_load);
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -116,8 +129,6 @@ process_wait (tid_t child_tid UNUSED)
 
   struct semaphore* to_wait = &(t->proc).wait;
   sema_down(to_wait);
-  //========remove this child or when some one call wait again it will wait for ever==========
-  list_remove (&t->proc.child_elem);
 
   // thread_set_priority(PRI_MIN);
   /*
@@ -153,13 +164,22 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      printf("%s: exit(%d)\n", cur->name,cur->rtv);
+
+      // =========if load failuer, then didnt print exit code=======
+      if(cur->proc.is_loaded){
+        printf("%s: exit(%d)\n", cur->name,cur->rtv);
+      }
       //=======wait up waited father if any=======
       sema_up(&(cur->proc).wait);
       struct thread* father = (cur->proc).father;
       if(father!=NULL && father->status != THREAD_DYING){
         sema_up( &(father->proc).wait_anyone );
       }
+
+
+      //========remove this child in father's child list or when some one call wait again it will wait for ever==========
+      list_remove (&cur->proc.child_elem);
+
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -284,6 +304,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", real_file_name);
+      // =======mark this thread loaded failure;===========
+      t->proc.is_loaded = false;
       goto done; 
     }
 
@@ -482,6 +504,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+
+  //======just test, will remove in futhure=====
+  // printf("TEST!!!base %d; bound: %d; upage: %d\n", read_bytes, zero_bytes, upage);
+
   return true;
 }
 
