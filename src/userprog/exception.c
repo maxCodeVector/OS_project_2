@@ -5,6 +5,10 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+//=========add nessary include =============
+#include "userprog/syscall.h"
+
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -86,6 +90,11 @@ kill (struct intr_frame *f)
     case SEL_UCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
+
+      //========just exit current process============
+      process_exit_with_status(-1); // this function make current thread exit itself with exit code: status
+
+
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
@@ -151,6 +160,7 @@ page_fault (struct intr_frame *f)
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
+   if(!user)
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",

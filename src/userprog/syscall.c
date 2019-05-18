@@ -32,7 +32,6 @@ int syscall_CLOSE(struct intr_frame *f);    /* Close a file. */
 struct process_file* search_fd(struct list* files, int fd);
 
 typedef int (*syscall_hander_function)(struct intr_frame *);
-void process_exit_with_status(int status); // this function make current thread exit itself with exit code: status
 syscall_hander_function pfn[MAXCALL];
 
 // this funcion check address if valid, it need to implement more completely later
