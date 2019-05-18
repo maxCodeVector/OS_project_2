@@ -9,6 +9,7 @@
 #include "threads/vaddr.h"
 #include "process.h"
 #include "threads/palloc.h"
+#include "filesys/off_t.h"
 #define MAXCALL 20
 
 static void syscall_handler(struct intr_frame *);
@@ -28,6 +29,7 @@ int syscall_WRITE(struct intr_frame *f);    /* Write to a file. */
 int syscall_SEEK(struct intr_frame *f);     /* Change position in a file. */
 int syscall_TELL(struct intr_frame *f);     /* Report current position in a file. */
 int syscall_CLOSE(struct intr_frame *f);    /* Close a file. */
+struct process_file* search_fd(struct list* files, int fd);
 
 typedef int (*syscall_hander_function)(struct intr_frame *);
 void process_exit_with_status(int status); // this function make current thread exit itself with exit code: status
@@ -188,6 +190,17 @@ int syscall_WAIT(struct intr_frame *f) /* Wait for a child process to die. */
 
 int syscall_CREATE(struct intr_frame *f) /* Create a file. */
 {
+	int ret;
+	off_t initial_size;
+	char *name;
+
+	pop_stack(f->esp, &initial_size, 5);
+	pop_stack(f->esp, &name, 4);
+	if (!is_valid_addr(name))
+		ret = -1;
+
+	ret = filesys_create(name, initial_size);
+	return ret;
 }
 
 int syscall_REMOVE(struct intr_frame *f) /* Delete a file. */
@@ -196,10 +209,54 @@ int syscall_REMOVE(struct intr_frame *f) /* Delete a file. */
 
 int syscall_OPEN(struct intr_frame *f) /* Open a file. */
 {
+	int ret;
+	char *name;
+
+	pop_stack(f->esp, &name, 1);
+	if (!is_valid_addr(name))
+		ret = -1;
+
+	// lock_acquire(&filesys_lock);
+	struct file *fptr = filesys_open(name);
+	// lock_release(&filesys_lock);
+
+	if (fptr == NULL)
+		ret = -1;
+	else
+	{
+		struct process_file *pfile = malloc(sizeof(*pfile));
+		pfile->ptr = fptr;
+		pfile->fd = thread_current()->fd_count;
+		thread_current()->fd_count++;
+		list_push_back(&thread_current()->opened_files, &pfile->elem);
+		ret = pfile->fd;
+	}
+	return ret;
 }
 
 int syscall_FILESIZE(struct intr_frame *f) /* Obtain a file's size. */
 {
+  int ret;
+	int fd;
+	pop_stack(f->esp, &fd, 1);
+
+	// lock_acquire(&filesys_lock);
+	ret = file_length (search_fd(&thread_current()->opened_files, fd)->ptr);
+	// lock_release(&filesys_lock);
+
+	return ret;
+}
+struct process_file *
+search_fd(struct list* files, int fd)
+{
+	struct process_file *proc_f;
+	for (struct list_elem *e = list_begin(files); e != list_end(files); e = list_next(e))
+	{
+		proc_f = list_entry(e, struct process_file, elem);
+		if (proc_f->fd == fd)
+			return proc_f;
+	}
+	return NULL;
 }
 
 int syscall_READ(struct intr_frame *f) /* Read from a file. */
