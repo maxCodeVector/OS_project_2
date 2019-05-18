@@ -56,3 +56,8 @@ dkms.conf
 
 .vscode
 src/.vscode/ipch
+
+src.bak/
+src.lizi/
+src.lizibak/
+

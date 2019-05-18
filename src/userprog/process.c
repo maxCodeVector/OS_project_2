@@ -129,8 +129,6 @@ process_wait (tid_t child_tid UNUSED)
 
   struct semaphore* to_wait = &(t->proc).wait;
   sema_down(to_wait);
-  //========remove this child or when some one call wait again it will wait for ever==========
-  list_remove (&t->proc.child_elem);
 
   // thread_set_priority(PRI_MIN);
   /*
@@ -177,6 +175,11 @@ process_exit (void)
       if(father!=NULL && father->status != THREAD_DYING){
         sema_up( &(father->proc).wait_anyone );
       }
+
+
+      //========remove this child in father's child list or when some one call wait again it will wait for ever==========
+      list_remove (&cur->proc.child_elem);
+
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -501,6 +504,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+
+  //======just test, will remove in futhure=====
+  // printf("TEST!!!base %d; bound: %d; upage: %d\n", read_bytes, zero_bytes, upage);
+
   return true;
 }
 
