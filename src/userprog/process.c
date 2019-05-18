@@ -388,11 +388,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   //=============we need to make sure no one can change the elf 
-  file_deny_write (file);
+  if(success){
+    file_deny_write (file);
 
-  t->proc.this_file = file;
+    t->proc.this_file = file;
   // file_close (file);
-
+  }
   return success;
 }
 
