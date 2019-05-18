@@ -121,6 +121,8 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int rtv;
+    struct list opened_files;     //all the opened files
+    int fd_count;
     
 #endif
 //==========add new struct to store process information============
