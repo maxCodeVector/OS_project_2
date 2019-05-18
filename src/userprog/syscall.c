@@ -319,7 +319,11 @@ int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
 
 int syscall_SEEK(struct intr_frame *f) /* Change position in a file. */
 {
-  
+  int fd;
+	int pos;
+	pop_stack(f->esp, &fd, 2);
+	pop_stack(f->esp, &pos, 1);
+	file_seek(search_fd(&thread_current()->opened_files, pos)->ptr, fd);
 }
 
 int syscall_TELL(struct intr_frame *f) /* Report current position in a file. */
