@@ -186,8 +186,8 @@ int syscall_CREATE(struct intr_frame *f) /* Create a file. */
 	off_t initial_size;
 	char *name;
 
-	pop_stack(f->esp, &initial_size, 5);
-	pop_stack(f->esp, &name, 4);
+	pop_stack(f->esp, &initial_size, 2);
+	pop_stack(f->esp, &name, 1);
 	if (!is_valid_addr(name))
 		ret = -1;
 
