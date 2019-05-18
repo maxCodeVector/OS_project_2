@@ -14,7 +14,6 @@
 
 //====lock to make sychonaiztion of read write file=======
 struct lock file_read_write_lock;
-;
 
 static void syscall_handler(struct intr_frame *);
 
@@ -122,7 +121,7 @@ syscall_handler(struct intr_frame *f UNUSED)
 void process_exit_with_status(int status)
 {
   struct thread *cur = thread_current();
-  cur->rtv = status;
+  cur->proc.rtv = status;
   thread_exit();
 }
 

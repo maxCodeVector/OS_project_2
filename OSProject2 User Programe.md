@@ -66,6 +66,56 @@ case SEL_UCSEG:
 - bad-write2
 - bad-jump
 - bad-jump2
+- syn-read: 
+  
+  - what does child-syn-read do?  problem: child finished first, so when father wait it it directly    
+  
+    return -1 immediately.
+  
+    find wait bug and fix it
+
+```c
+
+/**
+ * struct process, which is in strcut thread, store a semaphore to implement wait(), 
+ * and also store all information about this process such as open file, child process
+ * 
+*/
+struct process
+{
+  struct semaphore wait; // to implement wait a specially child, father will wait in this semaphore
+  struct semaphore wait_anyone; // to implement wait(-1)
+  struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
+
+  struct thread* father;
+  
+  struct list child;
+  // struct list_elem child_elem; // list elem for child list.
+  tid_t pid;
+  bool is_loaded;
+
+  struct file* this_file; // store the excutable file itself
+  int rtv;             // return value of this thread(process).
+
+  /* data */
+};
+
+struct process_node
+{
+  struct semaphore* father_wait; // its father will wait in this semaphore
+  // struct semaphore wait_anyone; // to implement wait(-1)
+  // struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
+
+  struct list_elem child_elem; // list elem for child list.
+  tid_t pid;
+  // bool is_loaded;
+
+  int rtv;             // return value of this thread(process).
+};
+
+```
+
+
 
 
 
