@@ -32,13 +32,16 @@ typedef int tid_t;
 */
 struct process
 {
-  struct semaphore wait; // to implement wait child
-  struct semaphore wait_anyone; // to implement wait -1
+  struct semaphore wait; // to implement wait a specially child, father will wait in this semaphore
+  struct semaphore wait_anyone; // to implement wait(-1)
+  struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
+
   struct thread* father;
   
   struct list child;
   struct list_elem child_elem; // list elem for child list.
   tid_t pid;
+  bool is_loaded;
   /* data */
 };
 

@@ -182,6 +182,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  
   // =========put the new process to current process's child list=============
   // now don't konow is there are race condition
   struct thread* cur = thread_current();
@@ -459,7 +460,9 @@ void init_process(struct process* proc)
   list_init(&proc->child);
   sema_init(&proc->wait, 0);
   sema_init(&proc->wait_anyone, 0);
-
+  sema_init(&proc->wait_load, 0);
+  proc->father = NULL;
+  proc->is_loaded = true;
 }
 
 

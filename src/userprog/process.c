@@ -47,12 +47,20 @@ process_execute (const char *file_name)
   file_name_only = strtok_r (file_name_only," ",&save_ptr);  // get the thread name
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_only, PRI_DEFAULT, start_process, fn_copy);
+  //==========sema_down wait_load to make sure load programe success=====
+  sema_down(&thread_current()->proc.wait_load);
 
 // ========== free the allocated memory ================
   free(file_name_only);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  else{
+    // ========when this thread does't load actually, show return -1========= 
+    struct thread* t = find_thread_by_tid(tid);
+    if(t!=NULL && !t->proc.is_loaded )
+      tid = -1;
+  }
   return tid;
 }
 
@@ -72,6 +80,11 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   success = load (file_name, &if_.eip, &if_.esp);
+
+  // ===========notify father load is success=========
+  struct thread* t = thread_current();
+  sema_up(&(t->proc).father->proc.wait_load);
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -153,7 +166,11 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      printf("%s: exit(%d)\n", cur->name,cur->rtv);
+
+      // =========if load failuer, then didnt print exit code=======
+      if(cur->proc.is_loaded){
+        printf("%s: exit(%d)\n", cur->name,cur->rtv);
+      }
       //=======wait up waited father if any=======
       sema_up(&(cur->proc).wait);
       struct thread* father = (cur->proc).father;
@@ -284,6 +301,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", real_file_name);
+      // =======mark this thread loaded failure;===========
+      t->proc.is_loaded = false;
       goto done; 
     }
 

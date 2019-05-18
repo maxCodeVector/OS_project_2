@@ -150,21 +150,25 @@ int syscall_EXEC(struct intr_frame *f) /* Start another process. */
     return -1;
   }
 
-  /* Open executable file and check if it is exist */
-  char * name_copy = malloc (strlen(file_name)+1);
-  char* argument_ptr;
-	strlcpy(name_copy, file_name, strlen(file_name) + 1);
+  return process_execute(file_name);
 
-  name_copy = strtok_r(name_copy, " ", &argument_ptr);
-  struct file* file = filesys_open (name_copy);
-  if (file == NULL) 
-    {
-      process_exit_with_status(-1);
-      return 0;
-    }else{
-      file_close(file);
-      return process_execute(file_name);
-    }
+  /* Open executable file and check if it is exist */
+  // char * name_copy = malloc (strlen(file_name)+1);
+  // char* argument_ptr;
+	// strlcpy(name_copy, file_name, strlen(file_name) + 1);
+
+
+  // name_copy = strtok_r(name_copy, " ", &argument_ptr);
+  // struct file* file = filesys_open (name_copy);
+  // if (file == NULL) 
+  //   {
+  //     process_exit_with_status(-1);
+  //     return 0;
+  //   }else{
+  //     file_close(file);
+  //     return process_execute(file_name);
+  //   }
+  //   free(name_copy);
 
 }
 
