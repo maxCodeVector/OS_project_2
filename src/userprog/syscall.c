@@ -12,6 +12,10 @@
 #include "filesys/off_t.h"
 #define MAXCALL 20
 
+//====lock to make sychonaiztion of read write file=======
+struct lock file_read_write_lock;
+;
+
 static void syscall_handler(struct intr_frame *);
 
 // =============all syscall project 2 need to implement ============
@@ -67,6 +71,9 @@ void syscall_init(void)
   {
     pfn[i] = NULL;
   }
+
+  lock_init(&file_read_write_lock); // initial the lock
+
   /** 
  * ========those lines register behaviour hander for each syscall==========
  * just need to write the concrete behaviour for these functions, then
@@ -299,7 +306,10 @@ int syscall_READ(struct intr_frame *f) /* Read from a file. */
       ret = -1;
     else
     {
+
+      lock_acquire(&file_read_write_lock);
       ret = file_read(pf->ptr, buffer, size);
+      lock_release(&file_read_write_lock);
     }
   }
 
@@ -363,5 +373,14 @@ int syscall_TELL(struct intr_frame *f) /* Report current position in a file. */
 int syscall_CLOSE(struct intr_frame *f) /* Close a file. */
 {
   int fd;
-  int ret;
+  int ret = 0;
+  pop_stack(f->esp, &fd, 1);
+  struct process_file *pf = search_fd(&thread_current()->opened_files, fd);
+  if (pf == NULL)
+    ret = -1;
+  else
+  {
+    file_close(pf->ptr);
+    list_remove(&pf->elem);
+  }
 }
