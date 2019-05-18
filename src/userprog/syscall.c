@@ -325,7 +325,6 @@ int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
     process_exit_with_status(-1);
   }
 
-
   if (fd == 1) // means it write to console (stdout)
   {
     putbuf(buffer, size);
