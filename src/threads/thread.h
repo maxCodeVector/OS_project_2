@@ -42,6 +42,8 @@ struct process
   struct list_elem child_elem; // list elem for child list.
   tid_t pid;
   bool is_loaded;
+
+  struct file* this_file; // store the excutable file itself
   /* data */
 };
 
@@ -123,7 +125,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    int rtv;
+    int rtv;             // return value of this thread(process).
     struct list opened_files;     //all the opened files
     int fd_count;
     

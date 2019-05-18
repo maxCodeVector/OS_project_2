@@ -57,6 +57,7 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy); 
   else{
     // ========when this thread does't load actually, show return -1========= 
+    // need to solve problem that child process finish first
     struct thread* t = find_thread_by_tid(tid);
     if(t!=NULL && !t->proc.is_loaded )
       tid = -1;
@@ -130,18 +131,7 @@ process_wait (tid_t child_tid UNUSED)
   struct semaphore* to_wait = &(t->proc).wait;
   sema_down(to_wait);
 
-  // thread_set_priority(PRI_MIN);
-  /*
-  if(to_wait!=NULL){
-    to_wait->value = 0;
-    sema_down(to_wait);
-  }  
-  struct thread* t = find_thread_by_tid(child_tid);
-  while( t->tid==child_tid && t->status!=THREAD_DYING ){
-    thread_yield();
-  }
-  // =========now just busy waiting===============
-  */
+  //need to solve problem when child finish first, then may not get its return value
   return t->rtv;
 }
 
@@ -168,6 +158,8 @@ process_exit (void)
       // =========if load failuer, then didnt print exit code=======
       if(cur->proc.is_loaded){
         printf("%s: exit(%d)\n", cur->name,cur->rtv);
+        file_allow_write(cur->proc.this_file);
+        file_close(cur->proc.this_file);
       }
       //=======wait up waited father if any=======
       sema_up(&(cur->proc).wait);
@@ -395,7 +387,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //=============we need to make sure no one can change the elf 
+  if(success){
+    file_deny_write (file);
+
+    t->proc.this_file = file;
+  // file_close (file);
+  }
   return success;
 }
 

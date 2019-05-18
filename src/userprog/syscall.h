@@ -5,6 +5,9 @@
 
 typedef void(*CALL_PROC)(struct intr_frame*);
 void syscall_init (void);
+
+
+//====this struct store the file this process hold=======
 struct process_file {
 	struct file* ptr;
 	int fd;
@@ -12,5 +15,4 @@ struct process_file {
 };
 void process_exit_with_status(int status); // this function make current thread exit itself with exit code: status
 
-// void system_write(struct intr_frame*);
 #endif /* userprog/syscall.h */

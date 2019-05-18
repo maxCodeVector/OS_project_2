@@ -10,6 +10,9 @@
         "lib.h": "c",
         "round.h": "c",
         "palloc.h": "c",
-        "vaddr.h": "c"
+        "vaddr.h": "c",
+        "filesys.h": "c",
+        "file.h": "c",
+        "directory.h": "c"
     }
 }
