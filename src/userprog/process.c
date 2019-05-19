@@ -20,6 +20,8 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+//======read write lock======
+struct lock file_read_write_lock;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -80,11 +82,15 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  lock_acquire(&file_read_write_lock); // ,make sure only one process read this file
+
   success = load (file_name, &if_.eip, &if_.esp);
 
   // ===========notify father load is success=========
   struct thread* t = thread_current();
-  sema_up(&(t->proc).father->proc.wait_load);
+
+  lock_release(&file_read_write_lock); // make sure only one process read this file
+  sema_up(&t->proc.father->proc.wait_load);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -112,27 +118,35 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 { 
-  // =======check if I am your father=========
-  if( !is_child(child_tid) || child_tid==TID_ERROR ){
-    return -1;
-  }
+
   if(child_tid == -1){
     struct thread* cur = thread_current();
-    sema_down( &(cur->proc).wait_anyone );
+    sema_down( &cur->proc.wait_anyone );
     return -1;
   }
 
+
+  // =======check if I am your father=========
+  // inlucde case that have waited this child once which means 
+  // I am not your father any more
+  struct list_elem* child_elem =  find_mychild(child_tid);
+  if( !is_child(child_tid) || child_elem==NULL ){
+    return -1;
+  }
   // =============get the wait child's samephore=======
-  struct thread* t = find_thread_by_tid(child_tid);
-  if(t->status==THREAD_DYING){
-    return -1;
-  }
+  struct process_node *child_pro = list_entry(child_elem, struct process_node, child_elem);
+  struct semaphore* to_wait = child_pro->father_wait;
 
-  struct semaphore* to_wait = &(t->proc).wait;
   sema_down(to_wait);
 
-  //need to solve problem when child finish first, then may not get its return value
-  return t->rtv;
+  //========remove this child in father's child list or when some one call wait again it will wait for ever==========
+  list_remove (&child_pro->child_elem);
+  int return_code = child_pro->rtv;
+  free(child_pro);
+  //need to solve problem when child finish first, then may not get its return value 
+  //even they don't think I am your father
+  return return_code;
+      
 }
 
 /* Free the current process's resources. */
@@ -157,20 +171,17 @@ process_exit (void)
 
       // =========if load failuer, then didnt print exit code=======
       if(cur->proc.is_loaded){
-        printf("%s: exit(%d)\n", cur->name,cur->rtv);
+        printf("%s: exit(%d)\n", cur->name,cur->proc.rtv);
         file_allow_write(cur->proc.this_file);
         file_close(cur->proc.this_file);
+        cur->node->rtv = cur->proc.rtv;
       }
       //=======wait up waited father if any=======
-      sema_up(&(cur->proc).wait);
-      struct thread* father = (cur->proc).father;
+      sema_up(&cur->proc.wait);
+      struct thread* father = cur->proc.father;
       if(father!=NULL && father->status != THREAD_DYING){
-        sema_up( &(father->proc).wait_anyone );
+        sema_up( &father->proc.wait_anyone );
       }
-
-
-      //========remove this child in father's child list or when some one call wait again it will wait for ever==========
-      list_remove (&cur->proc.child_elem);
 
       cur->pagedir = NULL;
       pagedir_activate (NULL);

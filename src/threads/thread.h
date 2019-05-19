@@ -8,6 +8,9 @@
 
 // ===========necessary include==========
 #include "synch.h"
+extern struct lock file_read_write_lock;
+
+
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -28,7 +31,6 @@ typedef int tid_t;
  * struct process, which is in strcut thread, store a semaphore to implement wait(), 
  * and also store all information about this process such as open file, child process
  * 
- * 
 */
 struct process
 {
@@ -39,12 +41,27 @@ struct process
   struct thread* father;
   
   struct list child;
-  struct list_elem child_elem; // list elem for child list.
+  // struct list_elem child_elem; // list elem for child list.
   tid_t pid;
   bool is_loaded;
 
   struct file* this_file; // store the excutable file itself
+  int rtv;             // return value of this thread(process).
+
   /* data */
+};
+
+struct process_node
+{
+  struct semaphore* father_wait; // its father will wait in this semaphore
+  // struct semaphore wait_anyone; // to implement wait(-1)
+  // struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
+
+  struct list_elem child_elem; // list elem for child list.
+  tid_t pid;
+  // bool is_loaded;
+
+  int rtv;             // return value of this thread(process).
 };
 
 
@@ -125,13 +142,13 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    int rtv;             // return value of this thread(process).
     struct list opened_files;     //all the opened files
     int fd_count;
     
 #endif
 //==========add new struct to store process information============
     struct process proc;  // the process this thread belong to
+    struct process_node* node; // the node will be used my its father
 
 
     /* Owned by thread.c. */
@@ -177,5 +194,6 @@ int thread_get_load_avg (void);
 struct thread* find_thread_by_tid(tid_t id);
 //check this id process is my child
 bool is_child(tid_t id);
+struct list_elem* find_mychild(tid_t id);
 
 #endif /* threads/thread.h */
