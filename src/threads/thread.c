@@ -648,13 +648,32 @@ struct list_elem *find_mychild(tid_t id)
   return e;
 }
 
+void release_mychild( )
+{
+  enum intr_level old_level = intr_disable();
+  
+  struct list_elem *e = NULL;
+  struct thread *t = thread_current();
+  for (e = list_begin(&t->proc.child); e != list_end(&t->proc.child);
+       e = list_next(e))
+  {
+    struct process_node *p = list_entry(e,
+                                   struct process_node, child_elem);
+    // free(p);
+  }
+
+  intr_set_level (old_level);
+
+}
+
+
 
 
 // ============initial process============
 void init_process(struct process *proc)
 {
   list_init(&proc->child);
-  sema_init(&proc->wait, 0);
+  // sema_init(&proc->wait, 0);
   sema_init(&proc->wait_anyone, 0);
   sema_init(&proc->wait_load, 0);
   proc->father = NULL;
@@ -669,7 +688,10 @@ struct process_node* create_process_node(struct process *proc){
   struct process_node* node = (struct process_node*)malloc(sizeof(struct process_node));
   node->pid = proc->pid;
   node->rtv = proc->rtv;
-  node->father_wait = &proc->wait;  // copy wait semaphore to node, father may wait in this semapgore
+  sema_init(&node->father_wait, 0);  // father will wait in this semaphore
+  proc->be_wait = &node->father_wait;
+
+  // node->father_wait = &proc->wait;  // copy wait semaphore to node, father may wait in this semapgore
   return node;
 }
 

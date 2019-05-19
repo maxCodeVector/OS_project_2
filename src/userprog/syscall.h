@@ -14,5 +14,10 @@ struct process_file {
 	struct list_elem elem;
 };
 void process_exit_with_status(int status); // this function make current thread exit itself with exit code: status
+void release_all_file( );
+
+
+
+extern struct lock file_read_write_lock;
 
 #endif /* userprog/syscall.h */

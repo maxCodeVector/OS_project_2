@@ -18,10 +18,12 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#include "syscall.h"
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 //======read write lock======
-struct lock file_read_write_lock;
+extern struct lock file_read_write_lock;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -135,7 +137,7 @@ process_wait (tid_t child_tid UNUSED)
   }
   // =============get the wait child's samephore=======
   struct process_node *child_pro = list_entry(child_elem, struct process_node, child_elem);
-  struct semaphore* to_wait = child_pro->father_wait;
+  struct semaphore* to_wait = &child_pro->father_wait;
 
   sema_down(to_wait);
 
@@ -143,10 +145,8 @@ process_wait (tid_t child_tid UNUSED)
   list_remove (&child_pro->child_elem);
   int return_code = child_pro->rtv;
   free(child_pro);
-  //need to solve problem when child finish first, then may not get its return value 
-  //even they don't think I am your father
-  return return_code;
-      
+  
+  return return_code;    
 }
 
 /* Free the current process's resources. */
@@ -176,12 +176,16 @@ process_exit (void)
         file_close(cur->proc.this_file);
         cur->node->rtv = cur->proc.rtv;
       }
-      //=======wait up waited father if any=======
-      sema_up(&cur->proc.wait);
+      //=======wait up waited father if any======= noted father may be finished, so access the reference is dangerous
       struct thread* father = cur->proc.father;
       if(father!=NULL && father->status != THREAD_DYING){
+        sema_up( cur->proc.be_wait);
         sema_up( &father->proc.wait_anyone );
       }
+      // noted that in there must do somthing to deallocate all resource, child_list, files owned etc.
+      // !!! must make child's father pointer to NULL
+      release_all_file( );
+      release_mychild();
 
       cur->pagedir = NULL;
       pagedir_activate (NULL);
