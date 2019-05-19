@@ -8,6 +8,13 @@ member: chengmin, huang Yu'an
 
 3. Can change compile optimized model to O0 for more convenient debug.
 
+Does your code exhibit any major memory safety problems (especially regarding Cstrings), memory leaks, poor error handling, or race conditions?
+
+Yes. We noted that when process_exetuce, it must wait untile child load programe completely and after child load completely, it also need to wait parent complete process_execute since patent need to konw child's status, child can not run too fast.
+And we also need to remember deallocated memory.
+
+
+
 ### Start:
 
 Need to write system call hander for each system call.
