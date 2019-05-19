@@ -52,7 +52,8 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_only, PRI_DEFAULT, start_process, fn_copy);
   //==========sema_down wait_load to make sure load programe success=====
-  sema_down(&thread_current()->proc.wait_load);
+  struct thread* cur = thread_current();
+  sema_down(&cur->proc.wait_child_load);
 
 // ========== free the allocated memory ================
   free(file_name_only);
@@ -66,6 +67,8 @@ process_execute (const char *file_name)
     if(t!=NULL && !t->proc.is_loaded )
       tid = -1;
   }
+  sema_up(&cur->proc.wait_father_execute);
+
   return tid;
 }
 
@@ -92,7 +95,9 @@ start_process (void *file_name_)
   struct thread* t = thread_current();
 
   lock_release(&file_read_write_lock); // make sure only one process read this file
-  sema_up(&t->proc.father->proc.wait_load);
+  sema_up(&t->proc.father->proc.wait_child_load);
+  sema_down(&t->proc.father->proc.wait_father_execute);
+
 
   /* If load failed, quit. */
   palloc_free_page (file_name);

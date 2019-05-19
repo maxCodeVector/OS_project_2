@@ -653,13 +653,18 @@ void release_mychild( )
   enum intr_level old_level = intr_disable();
   
   struct list_elem *e = NULL;
-  struct thread *t = thread_current();
-  for (e = list_begin(&t->proc.child); e != list_end(&t->proc.child);
+  struct thread *cur = thread_current();
+  for (e = list_begin(&cur->proc.child); e != list_end(&cur->proc.child);
        e = list_next(e))
   {
     struct process_node *p = list_entry(e,
                                    struct process_node, child_elem);
     // free(p);
+    struct thread * t = find_thread_by_tid(p->pid);
+    if(t!=NULL){
+      t->proc.father = NULL;
+    }
+
   }
 
   intr_set_level (old_level);
@@ -675,7 +680,9 @@ void init_process(struct process *proc)
   list_init(&proc->child);
   // sema_init(&proc->wait, 0);
   sema_init(&proc->wait_anyone, 0);
-  sema_init(&proc->wait_load, 0);
+  sema_init(&proc->wait_child_load, 0);
+  sema_init(&proc->wait_father_execute, 0);
+
   proc->father = NULL;
   proc->is_loaded = true;
   proc->rtv = 0;
