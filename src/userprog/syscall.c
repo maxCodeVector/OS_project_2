@@ -122,6 +122,8 @@ void process_exit_with_status(int status)
 {
   struct thread *cur = thread_current();
   cur->proc.rtv = status;
+  cur->node->rtv = cur->proc.rtv;
+
   thread_exit();
 }
 
@@ -136,15 +138,9 @@ int syscall_EXIT(struct intr_frame *f) /* Terminate this process. */
   int *esp = (int *)f->esp;
   int rtv;
   pop_stack(esp, &rtv, 1);
-  // if (!is_valid_addr(esp + 1))
-  // {
-  //   process_exit_with_status(-1);
-  // }
-  // else
-  // {
-  // int rtv = *(esp + 1);
+  
   process_exit_with_status(rtv);
-  // }
+
   return 0;
 }
 
@@ -225,9 +221,9 @@ int syscall_OPEN(struct intr_frame *f) /* Open a file. */
     // if name is null or some not valid, must terminated it
     process_exit_with_status(-1);
   }
-  // lock_acquire(&filesys_lock);
+  lock_acquire(&file_read_write_lock);
   struct file *fptr = filesys_open(name);
-  // lock_release(&filesys_lock);
+  lock_release(&file_read_write_lock);
 
   if (fptr == NULL)
     ret = -1;
