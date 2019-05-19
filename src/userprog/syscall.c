@@ -159,11 +159,6 @@ int syscall_EXEC(struct intr_frame *f) /* Start another process. */
     return -1;
   }
 
-  if (!is_valid_addr(file_name + 1))
-  {
-    printf("error\n");
-  }
-
   return process_execute(file_name);
 
   /* Open executable file and check if it is exist */

@@ -172,8 +172,10 @@ process_exit (void)
       // =========if load failuer, then didnt print exit code=======
       if(cur->proc.is_loaded){
         printf("%s: exit(%d)\n", cur->name,cur->proc.rtv);
-        file_allow_write(cur->proc.this_file);
-        file_close(cur->proc.this_file);
+        if(cur->proc.this_file!=NULL){
+          file_allow_write(cur->proc.this_file);
+          file_close(cur->proc.this_file);
+        }
         cur->node->rtv = cur->proc.rtv;
       }
       //=======wait up waited father if any======= noted father may be finished, so access the reference is dangerous
