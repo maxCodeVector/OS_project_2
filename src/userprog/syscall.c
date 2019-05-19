@@ -386,12 +386,19 @@ void release_all_file( )
 
   struct list *files = &thread_current()->opened_files;
   struct process_file *proc_f;
-  for (struct list_elem *e = list_begin(files); e != list_end(files); e = list_next(e))
+  struct list_elem *e;
+
+   while(!list_empty(files))
   {
+    e = list_pop_front(files);
+
     proc_f = list_entry(e, struct process_file, elem);
     file_close(proc_f->ptr);
-    // free(proc_f);
+    
+    free(proc_f);
+
   }
+
   intr_set_level (old_level);
 
   if(lock_held_by_current_thread(&file_read_write_lock)){

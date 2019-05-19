@@ -654,17 +654,17 @@ void release_mychild( )
   
   struct list_elem *e = NULL;
   struct thread *cur = thread_current();
-  for (e = list_begin(&cur->proc.child); e != list_end(&cur->proc.child);
-       e = list_next(e))
+
+  while(!list_empty(&cur->proc.child))
   {
+    e = list_pop_front(&cur->proc.child);
     struct process_node *p = list_entry(e,
                                    struct process_node, child_elem);
-    // free(p);
     struct thread * t = find_thread_by_tid(p->pid);
     if(t!=NULL){
       t->proc.father = NULL;
     }
-
+    free(p);
   }
 
   intr_set_level (old_level);
