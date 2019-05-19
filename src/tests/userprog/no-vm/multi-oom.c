@@ -105,6 +105,11 @@ consume_some_resources_and_die (int seed)
 int
 main (int argc, char *argv[])
 {
+  // msg ("begin");
+  // msg ("success. program forked %d times.", EXPECTED_REPETITIONS);
+  // msg ("end");
+  // exit(0);
+
   int n;
 
   n = argc > 1 ? atoi (argv[1]) : 0;
@@ -151,7 +156,7 @@ main (int argc, char *argv[])
       /* Else wait for child to report how deeply it was able to recurse. */
       int reached_depth = wait (child_pid);
       if (reached_depth == -1)
-        fail ("wait returned -1.");
+        fail ("wait returned -1. %d", child_pid);
 
       /* Record the depth reached during the first run; on subsequent
          runs, fail if those runs do not match the depth achieved on the

@@ -9,6 +9,13 @@
         "syscall.h": "c",
         "lib.h": "c",
         "round.h": "c",
-        "palloc.h": "c"
+        "palloc.h": "c",
+        "vaddr.h": "c",
+        "filesys.h": "c",
+        "file.h": "c",
+        "directory.h": "c",
+        "stdio.h": "c",
+        "stdlib.h": "c",
+        "synch.h": "c"
     }
 }

@@ -18,8 +18,12 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#include "syscall.h"
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+//======read write lock======
+extern struct lock file_read_write_lock;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -47,12 +51,24 @@ process_execute (const char *file_name)
   file_name_only = strtok_r (file_name_only," ",&save_ptr);  // get the thread name
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_only, PRI_DEFAULT, start_process, fn_copy);
+  //==========sema_down wait_load to make sure load programe success=====
+  struct thread* cur = thread_current();
+  sema_down(&cur->proc.wait_child_load);
 
 // ========== free the allocated memory ================
   free(file_name_only);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  else{
+    // ========when this thread does't load actually, show return -1========= 
+    // need to solve problem that child process finish first
+    struct thread* t = find_thread_by_tid(tid);
+    if(t!=NULL && !t->proc.is_loaded )
+      tid = -1;
+  }
+  sema_up(&cur->proc.wait_father_execute);
+
   return tid;
 }
 
@@ -71,11 +87,22 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  lock_acquire(&file_read_write_lock); // ,make sure only one process read this file
+
   success = load (file_name, &if_.eip, &if_.esp);
+
+  // ===========notify father load is success=========
+  struct thread* t = thread_current();
+
+  lock_release(&file_read_write_lock); // make sure only one process read this file
+  sema_up(&t->proc.father->proc.wait_child_load);
+  sema_down(&t->proc.father->proc.wait_father_execute);
+
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
-    thread_exit ();
+    process_exit_with_status(-1);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -98,18 +125,33 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 { 
-//     struct semaphore* to_wait = find_thread_by_tid(child_tid)->wait_child;
-//     // thread_set_priority(PRI_MIN);
-//     if(to_wait!=NULL){
-//       to_wait->value = 0;
-//       sema_down(to_wait);
-//     }  
-    struct thread* t = find_thread_by_tid(child_tid);
-    while( t->tid==child_tid && t->status!=THREAD_DYING ){
-      thread_yield();
-    }
-    // =========now just busy waiting===============
-    return t->rtv;
+
+  if(child_tid == -1){
+    struct thread* cur = thread_current();
+    sema_down( &cur->proc.wait_anyone );
+    return -1;
+  }
+
+
+  // =======check if I am your father=========
+  // inlucde case that have waited this child once which means 
+  // I am not your father any more
+  struct list_elem* child_elem =  find_mychild(child_tid);
+  if( !is_child(child_tid) || child_elem==NULL ){
+    return -1;
+  }
+  // =============get the wait child's samephore=======
+  struct process_node *child_pro = list_entry(child_elem, struct process_node, child_elem);
+  struct semaphore* to_wait = &child_pro->father_wait;
+
+  sema_down(to_wait);
+
+  //========remove this child in father's child list or when some one call wait again it will wait for ever==========
+  list_remove (&child_pro->child_elem);
+  int return_code = child_pro->rtv;
+  free(child_pro);
+  
+  return return_code;    
 }
 
 /* Free the current process's resources. */
@@ -131,7 +173,27 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      printf("%s: exit(%d)\n", cur->name,cur->rtv);
+
+      // =========if load failuer, then didnt print exit code=======
+      if(cur->proc.is_loaded){
+        printf("%s: exit(%d)\n", cur->name,cur->proc.rtv);
+        if(cur->proc.this_file!=NULL){
+          file_allow_write(cur->proc.this_file);
+          file_close(cur->proc.this_file);
+        }
+        cur->node->rtv = cur->proc.rtv;
+      }
+      //=======wait up waited father if any======= noted father may be finished, so access the reference is dangerous
+      struct thread* father = cur->proc.father;
+      if(father!=NULL && father->status != THREAD_DYING){
+        sema_up( cur->proc.be_wait);
+        sema_up( &father->proc.wait_anyone );
+      }
+      // noted that in there must do somthing to deallocate all resource, child_list, files owned etc.
+      // !!! must make child's father pointer to NULL
+      release_all_file( );
+      release_mychild();
+
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -256,6 +318,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", real_file_name);
+      // =======mark this thread loaded failure;===========
+      t->proc.is_loaded = false;
       goto done; 
     }
 
@@ -345,7 +409,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //=============we need to make sure no one can change the elf 
+  if(success){
+    file_deny_write (file);
+
+    t->proc.this_file = file;
+  // file_close (file);
+  }
   return success;
 }
 
@@ -454,6 +524,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+
+  //======just test, will remove in futhure=====
+  // printf("TEST!!!base %d; bound: %d; upage: %d\n", read_bytes, zero_bytes, upage);
+
   return true;
 }
 

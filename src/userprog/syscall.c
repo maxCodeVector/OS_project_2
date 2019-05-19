@@ -9,7 +9,11 @@
 #include "threads/vaddr.h"
 #include "process.h"
 #include "threads/palloc.h"
+#include "filesys/off_t.h"
 #define MAXCALL 20
+
+//====lock to make sychonaiztion of read write file=======
+struct lock file_read_write_lock;
 
 static void syscall_handler(struct intr_frame *);
 
@@ -28,21 +32,34 @@ int syscall_WRITE(struct intr_frame *f);    /* Write to a file. */
 int syscall_SEEK(struct intr_frame *f);     /* Change position in a file. */
 int syscall_TELL(struct intr_frame *f);     /* Report current position in a file. */
 int syscall_CLOSE(struct intr_frame *f);    /* Close a file. */
+struct process_file *search_fd(struct list *files, int fd);
 
 typedef int (*syscall_hander_function)(struct intr_frame *);
-void process_exit_with_status(int status); // this function make current thread exit itself with exit code: status
 syscall_hander_function pfn[MAXCALL];
 
 // this funcion check address if valid, it need to implement more completely later
 bool is_valid_addr(const void *vaddr)
 {
-  void *page_ptr = pagedir_get_page(thread_current()->pagedir, vaddr);
+  // void *page_ptr =
 
-  if (!is_user_vaddr(vaddr) || page_ptr == NULL)
+  if (!is_user_vaddr(vaddr) || pagedir_get_page(thread_current()->pagedir, vaddr) == NULL)
   {
     return false;
   }
   return true;
+}
+
+// get the arguments in esp and put it in address arg, also each time invoke it need to check if address is valid
+void pop_stack(int *esp, int *arg, int offset)
+{
+  if (is_valid_addr(esp + offset))
+  {
+    *arg = *(esp + offset);
+  }
+  else
+  {
+    process_exit_with_status(-1);
+  }
 }
 
 void syscall_init(void)
@@ -53,6 +70,9 @@ void syscall_init(void)
   {
     pfn[i] = NULL;
   }
+
+  lock_init(&file_read_write_lock); // initial the lock
+
   /** 
  * ========those lines register behaviour hander for each syscall==========
  * just need to write the concrete behaviour for these functions, then
@@ -101,7 +121,9 @@ syscall_handler(struct intr_frame *f UNUSED)
 void process_exit_with_status(int status)
 {
   struct thread *cur = thread_current();
-  cur->rtv = status;
+  cur->proc.rtv = status;
+  cur->node->rtv = cur->proc.rtv;
+
   thread_exit();
 }
 
@@ -114,31 +136,43 @@ int syscall_HALT(struct intr_frame *f) /* Halt the operating system. */
 int syscall_EXIT(struct intr_frame *f) /* Terminate this process. */
 {
   int *esp = (int *)f->esp;
-  if (!is_valid_addr(esp + 1))
-  {
-    process_exit_with_status(-1);
-  }
-  else
-  {
-    int rtv = *(esp + 1);
-    process_exit_with_status(rtv);
-  }
+  int rtv;
+  pop_stack(esp, &rtv, 1);
+  
+  process_exit_with_status(rtv);
+
   return 0;
 }
 
 int syscall_EXEC(struct intr_frame *f) /* Start another process. */
 {
   int *esp = (int *)f->esp;
-  if (!is_valid_addr(esp + 1))
+  char *file_name;
+  pop_stack(esp, &file_name, 1);
+  if (!is_valid_addr(file_name))
   {
     process_exit_with_status(-1);
     return -1;
   }
-  else
-  {
-    char *file = *(esp + 1);
-    return process_execute(file);
-  }
+
+  return process_execute(file_name);
+
+  /* Open executable file and check if it is exist */
+  // char * name_copy = malloc (strlen(file_name)+1);
+  // char* argument_ptr;
+  // strlcpy(name_copy, file_name, strlen(file_name) + 1);
+
+  // name_copy = strtok_r(name_copy, " ", &argument_ptr);
+  // struct file* file = filesys_open (name_copy);
+  // if (file == NULL)
+  //   {
+  //     process_exit_with_status(-1);
+  //     return 0;
+  //   }else{
+  //     file_close(file);
+  //     return process_execute(file_name);
+  //   }
+  //   free(name_copy);
 }
 
 int syscall_WAIT(struct intr_frame *f) /* Wait for a child process to die. */
@@ -146,13 +180,29 @@ int syscall_WAIT(struct intr_frame *f) /* Wait for a child process to die. */
   int *esp = (int *)f->esp;
   // if(!is_user_vaddr(esp+7))
   // ExitStatus(-1);
-  tid_t wait_id = *(esp + 1);
-  process_wait(wait_id);
-  return 0;
+  tid_t wait_id;
+  pop_stack(esp, &wait_id, 1);
+  return process_wait(wait_id);
 }
 
 int syscall_CREATE(struct intr_frame *f) /* Create a file. */
 {
+  int ret;
+  off_t initial_size;
+  char *name;
+
+  pop_stack(f->esp, &initial_size, 2);
+  pop_stack(f->esp, &name, 1);
+  if (!is_valid_addr(name))
+  {
+    ret = -1;
+    process_exit_with_status(-1);
+  }
+  else
+  {
+    ret = filesys_create(name, initial_size);
+  }
+  return ret;
 }
 
 int syscall_REMOVE(struct intr_frame *f) /* Delete a file. */
@@ -161,14 +211,99 @@ int syscall_REMOVE(struct intr_frame *f) /* Delete a file. */
 
 int syscall_OPEN(struct intr_frame *f) /* Open a file. */
 {
+  int ret;
+  char *name;
+
+  pop_stack(f->esp, &name, 1);
+  if (!is_valid_addr(name))
+  {
+    ret = -1;
+    // if name is null or some not valid, must terminated it
+    process_exit_with_status(-1);
+  }
+  lock_acquire(&file_read_write_lock);
+  struct file *fptr = filesys_open(name);
+  lock_release(&file_read_write_lock);
+
+  if (fptr == NULL)
+    ret = -1;
+  else
+  {
+    struct process_file *pfile = malloc(sizeof(*pfile));
+    pfile->ptr = fptr;
+    pfile->fd = thread_current()->fd_count;
+    thread_current()->fd_count++;
+    list_push_back(&thread_current()->opened_files, &pfile->elem);
+    ret = pfile->fd;
+  }
+  return ret;
 }
 
 int syscall_FILESIZE(struct intr_frame *f) /* Obtain a file's size. */
 {
+  int ret;
+  int fd;
+  pop_stack(f->esp, &fd, 1);
+
+  // lock_acquire(&filesys_lock);
+  ret = file_length(search_fd(&thread_current()->opened_files, fd)->ptr);
+  // lock_release(&filesys_lock);
+
+  return ret;
+}
+
+struct process_file *
+search_fd(struct list *files, int fd)
+{
+  struct process_file *proc_f;
+  for (struct list_elem *e = list_begin(files); e != list_end(files); e = list_next(e))
+  {
+    proc_f = list_entry(e, struct process_file, elem);
+    if (proc_f->fd == fd)
+      return proc_f;
+  }
+  return NULL;
 }
 
 int syscall_READ(struct intr_frame *f) /* Read from a file. */
 {
+  int ret;
+  int size;
+  void *buffer;
+  int fd;
+
+  pop_stack(f->esp, &size, 3);
+  pop_stack(f->esp, &buffer, 2);
+  pop_stack(f->esp, &fd, 1);
+
+  if (!is_valid_addr(buffer))
+  {
+    ret = -1;
+    process_exit_with_status(-1);
+  }
+  if (fd == 0)
+  {
+    int i;
+    uint8_t *buffer = buffer;
+    for (i = 0; i < size; i++)
+      buffer[i] = input_getc();
+    ret = size;
+  }
+  else
+  {
+    struct process_file *pf = search_fd(&thread_current()->opened_files, fd);
+    if (pf == NULL)
+      ret = -1;
+    else
+    {
+
+      lock_acquire(&file_read_write_lock);
+      ret = file_read(pf->ptr, buffer, size);
+      lock_release(&file_read_write_lock);
+    }
+  }
+
+  return ret;
 }
 
 int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
@@ -176,9 +311,19 @@ int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
   int *esp = (int *)f->esp;
   // if(!is_user_vaddr(esp+7))
   // ExitStatus(-1);
-  int fd = *(esp + 1);
-  char *buffer = (char *)*(esp + 2);
-  unsigned int size = *(esp + 3);
+  int fd;
+  char *buffer;
+  unsigned int size;
+  int ret;
+  pop_stack(esp, &fd, 1);
+  pop_stack(esp, &buffer, 2);
+  pop_stack(esp, &size, 3);
+  // check if buffer address is valid
+  if (!is_valid_addr(buffer))
+  {
+    ret = -1;
+    process_exit_with_status(-1);
+  }
 
   if (fd == 1) // means it write to console (stdout)
   {
@@ -187,18 +332,77 @@ int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
   }
   else
   {
-    printf("I only can print in console!\n");
+    struct process_file *pf = search_fd(&thread_current()->opened_files, fd);
+    if (pf == NULL)
+      ret = -1;
+    else
+    {
+
+      lock_acquire(&file_read_write_lock);
+      ret = file_write(pf->ptr, buffer, size);
+      lock_release(&file_read_write_lock);
+    }
   }
-  return 0;
+  return ret;
 }
 
 int syscall_SEEK(struct intr_frame *f) /* Change position in a file. */
 {
+  int fd;
+  int pos;
+  pop_stack(f->esp, &pos, 2);
+  pop_stack(f->esp, &fd, 1);
+  file_seek(search_fd(&thread_current()->opened_files, fd)->ptr, pos);
 }
 
 int syscall_TELL(struct intr_frame *f) /* Report current position in a file. */
 {
+  int fd;
+  int pos;
+  pop_stack(f->esp, &pos, 2);
+  pop_stack(f->esp, &fd, 1);
+  file_tell(search_fd(&thread_current()->opened_files, fd)->ptr);
 }
 int syscall_CLOSE(struct intr_frame *f) /* Close a file. */
 {
+  int fd;
+  int ret = 0;
+  pop_stack(f->esp, &fd, 1);
+  struct process_file *pf = search_fd(&thread_current()->opened_files, fd);
+  if (pf == NULL)
+    ret = -1;
+  else
+  {
+    file_close(pf->ptr);
+    list_remove(&pf->elem);
+    free(pf);
+  }
 }
+
+
+void release_all_file( )
+{
+  enum intr_level old_level = intr_disable();
+
+  struct list *files = &thread_current()->opened_files;
+  struct process_file *proc_f;
+  struct list_elem *e;
+
+   while(!list_empty(files))
+  {
+    e = list_pop_front(files);
+
+    proc_f = list_entry(e, struct process_file, elem);
+    file_close(proc_f->ptr);
+    
+    free(proc_f);
+
+  }
+
+  intr_set_level (old_level);
+
+  if(lock_held_by_current_thread(&file_read_write_lock)){
+    lock_release(&file_read_write_lock);
+  }
+}
+
