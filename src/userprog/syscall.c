@@ -159,11 +159,6 @@ int syscall_EXEC(struct intr_frame *f) /* Start another process. */
     return -1;
   }
 
-  if (!is_valid_addr(file_name + 1))
-  {
-    printf("error\n");
-  }
-
   return process_execute(file_name);
 
   /* Open executable file and check if it is exist */
@@ -346,7 +341,10 @@ int syscall_WRITE(struct intr_frame *f) /* Write to a file. */
       ret = -1;
     else
     {
+
+      lock_acquire(&file_read_write_lock);
       ret = file_write(pf->ptr, buffer, size);
+      lock_release(&file_read_write_lock);
     }
   }
   return ret;
@@ -381,5 +379,27 @@ int syscall_CLOSE(struct intr_frame *f) /* Close a file. */
   {
     file_close(pf->ptr);
     list_remove(&pf->elem);
+    free(pf);
   }
 }
+
+
+void release_all_file( )
+{
+  enum intr_level old_level = intr_disable();
+
+  struct list *files = &thread_current()->opened_files;
+  struct process_file *proc_f;
+  for (struct list_elem *e = list_begin(files); e != list_end(files); e = list_next(e))
+  {
+    proc_f = list_entry(e, struct process_file, elem);
+    file_close(proc_f->ptr);
+    // free(proc_f);
+  }
+  intr_set_level (old_level);
+
+  if(lock_held_by_current_thread(&file_read_write_lock)){
+    lock_release(&file_read_write_lock);
+  }
+}
+

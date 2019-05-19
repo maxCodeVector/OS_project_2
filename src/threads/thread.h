@@ -8,7 +8,6 @@
 
 // ===========necessary include==========
 #include "synch.h"
-extern struct lock file_read_write_lock;
 
 
 
@@ -34,7 +33,7 @@ typedef int tid_t;
 */
 struct process
 {
-  struct semaphore wait; // to implement wait a specially child, father will wait in this semaphore
+  struct semaphore* be_wait; // father will wait in this semaphore, get the pointer from parent
   struct semaphore wait_anyone; // to implement wait(-1)
   struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
 
@@ -53,7 +52,7 @@ struct process
 
 struct process_node
 {
-  struct semaphore* father_wait; // its father will wait in this semaphore
+  struct semaphore father_wait; // father will wait in this semaphore, allocated by father and give the poiner to child
   // struct semaphore wait_anyone; // to implement wait(-1)
   // struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
 
@@ -195,5 +194,6 @@ struct thread* find_thread_by_tid(tid_t id);
 //check this id process is my child
 bool is_child(tid_t id);
 struct list_elem* find_mychild(tid_t id);
+void release_mychild( );
 
 #endif /* threads/thread.h */
