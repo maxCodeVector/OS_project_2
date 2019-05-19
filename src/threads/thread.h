@@ -35,7 +35,8 @@ struct process
 {
   struct semaphore* be_wait; // father will wait in this semaphore, get the pointer from parent
   struct semaphore wait_anyone; // to implement wait(-1)
-  struct semaphore wait_load; // to implement wait load, father need to wait child process loaded completely
+  struct semaphore wait_child_load; // to implement wait child load completely, father need to wait child process loaded completely
+  struct semaphore wait_father_execute; // to implement wait  pather executed, child need to wait father process process_execute completely
 
   struct thread* father;
   
